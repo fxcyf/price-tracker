@@ -1,0 +1,166 @@
+import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, ExternalLink, ShoppingBag } from "lucide-react";
+import { getProduct, getWatchConfig } from "@/api/client";
+import PriceChart from "@/components/PriceChart";
+import WatchConfigCard from "@/components/WatchConfigCard";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function formatPrice(price: number | null, currency: string): string {
+  if (price === null) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(price);
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function ProductDetailPage() {
+  const { id } = useParams<{ id: string }>();
+
+  const { data: product, isLoading: loadingProduct } = useQuery({
+    queryKey: ["product", id],
+    queryFn: () => getProduct(id!).then((r) => r.data),
+    enabled: !!id,
+  });
+
+  const { data: watchConfig, isLoading: loadingWatch } = useQuery({
+    queryKey: ["watch", id],
+    queryFn: () => getWatchConfig(id!).then((r) => r.data),
+    enabled: !!id,
+  });
+
+  const isLoading = loadingProduct || loadingWatch;
+
+  return (
+    <div className="flex flex-col">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 flex h-14 min-w-0 items-center gap-3 border-b bg-background px-4">
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back</span>
+        </Link>
+
+        {isLoading ? (
+          <Skeleton className="h-4 w-48" />
+        ) : (
+          <p className="min-w-0 flex-1 truncate text-sm font-medium">
+            {product?.title ?? product?.url ?? "Product"}
+          </p>
+        )}
+
+        {product && (
+          <a
+            href={product.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Open original product page"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+      </div>
+
+      <div className="space-y-4 p-4">
+        {/* Product hero */}
+        {isLoading ? (
+          <HeroSkeleton />
+        ) : product ? (
+          <div className="flex gap-4 rounded-lg border bg-card p-4">
+            {/* Image */}
+            <div className="h-24 w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:h-32 sm:w-32">
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.title ?? "Product"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+                </div>
+              )}
+            </div>
+
+            {/* Info */}
+            <div className="min-w-0 flex-1 space-y-2">
+              <h1 className="text-base font-semibold leading-snug sm:text-lg">
+                {product.title ?? product.url}
+              </h1>
+
+              <p className="text-2xl font-bold tabular-nums">
+                {formatPrice(product.current_price, product.currency)}
+              </p>
+
+              <div className="flex flex-wrap gap-1.5">
+                {product.platform && product.platform !== "generic" && (
+                  <Badge variant="secondary" className="capitalize">
+                    {product.platform}
+                  </Badge>
+                )}
+                {product.category && (
+                  <Badge variant="outline">{product.category}</Badge>
+                )}
+                {product.tags.map((tag) => (
+                  <Badge key={tag.id} variant="outline" className="text-xs">
+                    {tag.name}
+                  </Badge>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Last updated: {formatDate(product.updated_at)}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
+            <p>Product not found.</p>
+            <Link to="/" className="mt-2 inline-block text-sm text-primary hover:underline">
+              Return to list
+            </Link>
+          </div>
+        )}
+
+        {/* Price chart */}
+        {id && product && (
+          <PriceChart productId={id} currency={product.currency} />
+        )}
+
+        {/* Watch config */}
+        {id && (
+          <WatchConfigCard productId={id} initial={watchConfig} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HeroSkeleton() {
+  return (
+    <div className="flex gap-4 rounded-lg border bg-card p-4">
+      <Skeleton className="h-24 w-24 shrink-0 rounded-md sm:h-32 sm:w-32" />
+      <div className="flex-1 space-y-3">
+        <Skeleton className="h-5 w-3/4" />
+        <Skeleton className="h-5 w-1/2" />
+        <Skeleton className="h-7 w-28" />
+        <div className="flex gap-2">
+          <Skeleton className="h-5 w-16" />
+          <Skeleton className="h-5 w-20" />
+        </div>
+        <Skeleton className="h-3 w-36" />
+      </div>
+    </div>
+  );
+}
