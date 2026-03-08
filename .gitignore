@@ -32,6 +32,9 @@ Thumbs.db
 # Docker
 .docker/
 
+# Scratch / local test files
+backend/curl
+
 # Node / Frontend
 node_modules/
 .next/
