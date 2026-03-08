@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     app_name: str = "Price Tracker"
     frontend_url: str = "http://localhost:5173"
     debug: bool = False
+    # Default check interval for Beat schedule (can be overridden in .env)
+    check_interval_hours: int = 24
 
 
 @lru_cache
