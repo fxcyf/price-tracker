@@ -178,7 +178,7 @@ export default function ProductListPage() {
 function SkeletonCard() {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
-      <Skeleton className="aspect-square w-full" />
+      <Skeleton className="h-64 w-full sm:h-72" />
       <div className="space-y-1.5 p-2.5">
         <Skeleton className="h-3 w-12" />
         <Skeleton className="h-3 w-full" />

@@ -65,14 +65,23 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Product image */}
         <Link to={`/products/${product.id}`} className="block">
-          <div className="aspect-square w-full overflow-hidden bg-muted">
+          <div className="relative h-64 w-full overflow-hidden bg-muted sm:h-72">
             {product.image_url ? (
-              <img
-                src={product.image_url}
-                alt={product.title ?? "Product"}
-                className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                loading="lazy"
-              />
+              <>
+                {/* Blurred background — same image scaled up to fill and softened */}
+                <img
+                  src={product.image_url}
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl opacity-50"
+                />
+                {/* Foreground image — fills full width, crops vertically if taller than container */}
+                <img
+                  src={product.image_url}
+                  alt={product.title ?? "Product"}
+                  className="relative h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                  loading="lazy"
+                />
+              </>
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/50">
                 <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
