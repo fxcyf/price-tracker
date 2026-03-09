@@ -17,6 +17,29 @@ from app.scrapers.fetcher import CookiesExpiredError, SiteBlockedError
 router = APIRouter(tags=["products"])
 
 
+@router.get("/tags", response_model=list[str])
+async def list_tags(db: DB):
+    """Return all tag names that are used by at least one product, sorted alphabetically."""
+    rows = await db.execute(
+        select(Tag.name)
+        .join(Tag.products)
+        .distinct()
+        .order_by(Tag.name)
+    )
+    return rows.scalars().all()
+
+
+@router.delete("/tags/{tag_name}", status_code=204)
+async def delete_tag(tag_name: str, db: DB):
+    """Delete a tag by name. Removes it from all products automatically (cascade)."""
+    row = await db.execute(select(Tag).where(Tag.name == tag_name))
+    tag = row.scalar_one_or_none()
+    if tag is None:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    await db.delete(tag)
+    await db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
@@ -161,6 +184,53 @@ async def list_products(
 async def get_product(product_id: uuid.UUID, db: DB):
     """Get a single product by ID."""
     return await _get_product_or_404(db, product_id)
+
+
+class TagSuggestionsOut(BaseModel):
+    suggested_tags: list[str]
+
+
+@router.post("/products/{product_id}/suggest-tags", response_model=TagSuggestionsOut)
+async def suggest_tags(product_id: uuid.UUID, db: DB):
+    """
+    Ask the LLM to suggest tags for a product based on its title and category.
+    Also normalises the raw category string as a side effect.
+    Returns suggested tag names only — does not modify the product.
+    """
+    from app.scrapers.extractors.llm import normalize_and_suggest
+
+    product = await _get_product_or_404(db, product_id)
+
+    # Fetch all existing tag names for context
+    tag_rows = await db.execute(
+        select(Tag.name).join(Tag.products).distinct().order_by(Tag.name)
+    )
+    existing_tags = list(tag_rows.scalars().all())
+
+    _, suggested = await normalize_and_suggest(
+        title=product.title,
+        raw_category=product.category,
+        existing_tags=existing_tags,
+    )
+    return TagSuggestionsOut(suggested_tags=suggested)
+
+
+class TagsUpdate(BaseModel):
+    tags: list[str]
+
+
+@router.patch("/products/{product_id}/tags", response_model=ProductOut)
+async def update_product_tags(product_id: uuid.UUID, body: TagsUpdate, db: DB):
+    """Replace the tag set for a product."""
+    product = await _get_product_or_404(db, product_id)
+    product.tags = await _get_or_create_tags(db, body.tags)
+    await db.commit()
+    result = await db.execute(
+        select(Product)
+        .where(Product.id == product_id)
+        .options(selectinload(Product.tags))
+    )
+    return result.scalar_one()
 
 
 @router.delete("/products/{product_id}", status_code=204)

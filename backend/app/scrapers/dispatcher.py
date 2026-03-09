@@ -18,7 +18,7 @@ from app.models.domain_rule import CookieStatus, DomainRule
 from app.scrapers.extractors.llm import extract_with_llm
 from app.scrapers.extractors.opengraph import extract_opengraph
 from app.scrapers.extractors.rules import extract_by_learned_rule, extract_by_rules
-from app.scrapers.fetcher import CookiesExpiredError, fetch_page, preprocess_html
+from app.scrapers.fetcher import CookiesExpiredError, SiteBlockedError, fetch_page, preprocess_html
 from app.scrapers.schemas import ProductData
 
 logger = logging.getLogger(__name__)
@@ -91,8 +91,8 @@ async def _mark_cookies_expired(db: AsyncSession, domain: str) -> None:
 
 async def scrape_product(url: str, db: AsyncSession) -> ProductData:
     """
-    Full product scrape: fetches the page and runs the extraction pipeline.
-    Used when importing a new product.
+    Full product scrape: fetches the page, runs extraction, then normalizes
+    the category and suggests tags via LLM.
     """
     domain = _get_domain(url)
     rule = await _get_learned_rule(db, domain)

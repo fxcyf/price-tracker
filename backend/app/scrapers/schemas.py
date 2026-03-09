@@ -18,6 +18,9 @@ class ProductData:
     learned_title_selector: str | None = None
     learned_image_selector: str | None = None
 
+    # LLM-suggested tags for this product (shown as pre-selected chips in the UI)
+    suggested_tags: list[str] = field(default_factory=list)
+
     def is_complete(self) -> bool:
         """A result is considered complete when we have at least a price."""
         return self.price is not None
@@ -35,4 +38,5 @@ class ProductData:
             learned_price_selector=self.learned_price_selector or other.learned_price_selector,
             learned_title_selector=self.learned_title_selector or other.learned_title_selector,
             learned_image_selector=self.learned_image_selector or other.learned_image_selector,
+            suggested_tags=self.suggested_tags or other.suggested_tags,
         )
