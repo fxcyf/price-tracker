@@ -47,6 +47,19 @@ def run_fixture_test(fixture_name: str, url: str, learned_selectors: dict | None
 
     run_test(html, url, learned_selectors)
 
+def run_real_world_test_from_file(file_path: str) -> None:
+    with open(file_path, "r") as file:
+        urls = file.readlines()
+    for url in urls:
+        url = url.strip()
+
+        try:
+            asyncio.run(run_real_world_test(url))
+        except Exception as e:
+            print(f"Error: {e}")
+            print(f"{'='*60}")
+        finally:
+            print(f"{'='*60}")
 
 async def run_real_world_test(url: str) -> None:
     print(f"\n{'='*60}")
@@ -57,7 +70,11 @@ async def run_real_world_test(url: str) -> None:
         return
 
     print("HTML fetched successfully")
-    run_test(html, url)
+
+    try:
+        run_test(html, url)
+    except Exception as e:
+        print(f"Error: {e}")
 
 
 async def run_curl_test(curl_string: str) -> None:
@@ -145,6 +162,11 @@ if __name__ == "__main__":
         else:
             curl_string = Path(source).read_text()
         asyncio.run(run_curl_test(curl_string))
+        sys.exit(0)
+    
+    if len(sys.argv) >= 3 and sys.argv[1] == "--live-file":
+        file_path = sys.argv[2]
+        asyncio.run(run_real_world_test_from_file(file_path))
         sys.exit(0)
 
     # Fixture mode (default)
