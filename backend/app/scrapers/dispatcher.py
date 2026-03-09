@@ -116,19 +116,16 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> Product
     domain = _get_domain(url)
     result = ProductData(url=url)
 
+    # Layers 1–2b are all cheap (no network, no LLM); always run all of them so
+    # that later layers can fill in fields (e.g. image) missed by earlier ones.
+
     # Layer 1: OpenGraph / JSON-LD
-    og_data = extract_opengraph(html, url)
-    result = result.merge(og_data)
-    if result.is_complete():
-        logger.debug("Layer 1 (OpenGraph) succeeded for %s", url)
-        return result
+    result = result.merge(extract_opengraph(html, url))
+    logger.debug("Layer 1 (OpenGraph) done for %s", url)
 
     # Layer 2a: Built-in platform rules
-    rule_data = extract_by_rules(html, url)
-    result = result.merge(rule_data)
-    if result.is_complete():
-        logger.debug("Layer 2a (platform rules) succeeded for %s", url)
-        return result
+    result = result.merge(extract_by_rules(html, url))
+    logger.debug("Layer 2a (platform rules) done for %s", url)
 
     # Layer 2b: Learned domain rules
     learned_rule = await _get_learned_rule(db, domain)
@@ -142,11 +139,14 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> Product
         )
         result = result.merge(learned_data)
         if result.is_complete():
-            logger.debug("Layer 2b (learned rules) succeeded for %s", url)
-            # Increment success count
+            logger.debug("Layer 2b (learned rules) completed extraction for %s", url)
             learned_rule.success_count += 1
             await db.commit()
-            return result
+
+    # Skip the expensive LLM call when all cheap layers already found a price.
+    if result.is_complete():
+        logger.debug("Extraction complete after cheap layers for %s", url)
+        return result
 
     # Layer 3: LLM fallback
     logger.info("Falling back to LLM extraction for %s", url)

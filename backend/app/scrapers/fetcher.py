@@ -22,6 +22,13 @@ HEADERS = {
     "sec-ch-ua-platform": '"Linux"',
 }
 
+# Sites that serve a React/Next.js shell via httpx (looks "complete" but has no price).
+# For these, skip httpx and go straight to Playwright.
+PLAYWRIGHT_REQUIRED_DOMAINS = {
+    "target.com",
+    "bestbuy.com",
+}
+
 BLOCKED_SIGNALS = [
     "robot check",
     "access denied",
@@ -146,7 +153,7 @@ async def fetch_with_playwright(url: str) -> str:
             except Exception:
                 pass
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(4000)
             html = await page.content()
         finally:
             await context.close()
@@ -167,6 +174,7 @@ async def fetch_page(url: str, stored_cookies: dict | None = None) -> str:
       3. Playwright with persistent profile — handles JS rendering and light bot protection
     """
     domain = (urlparse(url).hostname or "").removeprefix("www.")
+    needs_playwright = any(domain == d or domain.endswith(f".{d}") for d in PLAYWRIGHT_REQUIRED_DOMAINS)
 
     # Layer 0: user-imported cookies (bypasses PerimeterX, Cloudflare with session)
     if stored_cookies:
@@ -175,17 +183,18 @@ async def fetch_page(url: str, stored_cookies: dict | None = None) -> str:
         if html:
             return html
 
-    # Layer 1: anonymous httpx
-    html = await fetch_with_httpx(url)
-    if html:
-        return html
+    # Layer 1: anonymous httpx — skipped for known JS-heavy SPAs
+    if not needs_playwright:
+        html = await fetch_with_httpx(url)
+        if html:
+            return html
 
     # Layer 2: Playwright with persistent profile
     logger.info("Falling back to Playwright for %s", url)
     return await fetch_with_playwright(url)
 
 
-def preprocess_html(html: str, max_chars: int = 8000) -> str:
+def preprocess_html(html: str, max_chars: int = 12000) -> str:
     """Strip noise from HTML and truncate for LLM consumption."""
     soup = BeautifulSoup(html, "lxml")
     for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript", "svg"]):

@@ -32,7 +32,13 @@ def extract_opengraph(html: str, url: str) -> ProductData:
         return tag.get("content") if tag else None
 
     data.title = og("title")
-    data.image_url = og("image")
+    # Try multiple image sources in priority order
+    data.image_url = (
+        og("image")
+        or og("image:secure_url")
+        or _meta_content(soup, "twitter:image")
+        or _meta_content(soup, "twitter:image:src")
+    )
 
     # Product-specific OG price tags
     price_amount = (
@@ -66,6 +72,12 @@ def extract_opengraph(html: str, url: str) -> ProductData:
                     break
         except Exception:
             continue
+
+    # Last-resort: itemprop="image" anywhere in the body
+    if not data.image_url:
+        img_tag = soup.find(attrs={"itemprop": "image"})
+        if img_tag:
+            data.image_url = img_tag.get("src") or img_tag.get("content")
 
     return data
 
