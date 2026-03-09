@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import DB
 from app.models.price_history import PriceHistory
 from app.models.product import Product, Tag
+from app.models.watch_config import WatchConfig
 from app.scrapers.dispatcher import scrape_product
 from app.scrapers.fetcher import CookiesExpiredError, SiteBlockedError
 
@@ -125,9 +126,16 @@ async def create_product(body: ProductCreate, db: DB):
             currency=data.currency,
         ))
 
+    # Create default watch config so GET /products/{id}/watch never 404s
+    db.add(WatchConfig(product_id=product.id))
+
     await db.commit()
-    await db.refresh(product)
-    return product
+    result = await db.execute(
+        select(Product)
+        .where(Product.id == product.id)
+        .options(selectinload(Product.tags))
+    )
+    return result.scalar_one()
 
 
 @router.get("/products", response_model=list[ProductOut])
