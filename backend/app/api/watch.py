@@ -42,6 +42,15 @@ async def get_watch_config(product_id: uuid.UUID, db: DB):
     return config
 
 
+@router.post("/products/{product_id}/check")
+async def trigger_price_check(product_id: uuid.UUID, db: DB):
+    """Enqueue an immediate price check for a single product."""
+    await _get_product_or_404(db, product_id)
+    from app.tasks.price_check import check_product_price
+    task = check_product_price.delay(str(product_id))
+    return {"status": "queued", "task_id": task.id}
+
+
 @router.put("/products/{product_id}/watch", response_model=WatchConfigOut)
 async def upsert_watch_config(product_id: uuid.UUID, body: WatchConfigIn, db: DB):
     """Create or update the watch/alert config for a product."""
