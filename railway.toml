@@ -1,0 +1,16 @@
+# Railway deployment configuration for the API service.
+# Worker and Beat are separate Railway services using the same Dockerfile
+# with different start commands set in the Railway dashboard.
+#
+# See .env.example for the required environment variables.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+startCommand = "/app/entrypoint.sh uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
