@@ -74,3 +74,27 @@ def send_price_alert(
     )
 
     send_email(to, subject, html_body)
+
+
+def send_price_digest(to: str, alerts: list[dict]) -> None:
+    """
+    Send a single digest email summarising all price alerts from one check cycle.
+
+    Each item in `alerts` is the result dict returned by check_product_price
+    when alert=True:
+      { title, url, image_url, currency, old_price, new_price, direction, pct }
+    """
+    n_dropped = sum(1 for a in alerts if a.get("direction") == "dropped")
+    n_risen = sum(1 for a in alerts if a.get("direction") == "increased")
+
+    parts = []
+    if n_dropped:
+        parts.append(f"{n_dropped} dropped")
+    if n_risen:
+        parts.append(f"{n_risen} rose")
+    subject = f"Price Tracker: {', '.join(parts)} ({len(alerts)} product{'s' if len(alerts) > 1 else ''})"
+
+    template = _jinja_env.get_template("price_digest.html")
+    html_body = template.render(alerts=alerts)
+
+    send_email(to, subject, html_body)
