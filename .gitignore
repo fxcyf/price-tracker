@@ -32,6 +32,10 @@ Thumbs.db
 # Docker
 .docker/
 
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
 # Scratch / local test files
 backend/curl
 
