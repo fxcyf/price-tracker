@@ -3,7 +3,7 @@
 import logging
 import re
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -53,8 +53,19 @@ PLATFORM_RULES: dict[str, PlatformRule] = {
     ),
     "bestbuy.com": PlatformRule(
         platform="bestbuy",
-        price_selector=".priceView-customer-price span[aria-hidden='true']",
-        title_selector=".sku-title h1",
+        price_selector=(
+            ".priceView-hero-price span[aria-hidden='true'], "
+            ".priceView-customer-price span[aria-hidden='true'], "
+            "[data-testid='customer-price'] span[aria-hidden='true'], "
+            "[data-testid='customer-price'] span"
+        ),
+        title_selector=(
+            "h1.h4, "
+            ".sku-title h1, "
+            "h1[class*='sku-title'], "
+            "h1[itemprop='name'], "
+            "[itemprop='name'] h1"
+        ),
         image_selector=".primary-image",
         currency="USD",
     ),
@@ -70,6 +81,60 @@ PLATFORM_RULES: dict[str, PlatformRule] = {
         price_selector="#prcIsum, .notranslate[itemprop='price']",
         title_selector="#itemTitle",
         image_selector="#icImg",
+        currency="USD",
+    ),
+    "homedepot.com": PlatformRule(
+        platform="homedepot",
+        price_selector=(
+            ".price-format__main-price, "
+            "[class*='price-format__large'], "
+            "[data-testid='price-format__main-price']"
+        ),
+        title_selector=(
+            "h1[class*='product-details'], "
+            "h1.product-details__badge-title, "
+            "[data-testid='product-detail-title'] h1"
+        ),
+        image_selector=(
+            "[class*='mediagallery__mainimage'] img, "
+            "[class*='product-image'] img, "
+            "[data-testid='product-image'] img"
+        ),
+        currency="USD",
+    ),
+    "target.com": PlatformRule(
+        platform="target",
+        price_selector="[data-test='product-price']",
+        title_selector="[data-test='product-title'] h1, h1[data-test='product-title']",
+        image_selector="[data-test='product-image-hero'] img, [data-test='pdp-media-img'] img",
+        currency="USD",
+    ),
+    "uniqlo.com": PlatformRule(
+        platform="uniqlo",
+        # fr-ec-price-text--large is the main PDP price; --middle is used on recommendation tiles
+        price_selector="p.fr-ec-price-text--large, div.fr-ec-price p",
+        title_selector=(
+            "div.ito-margin-bottom-16 div[class*='ito-font-weight'], "
+            "div[class*='gutter-container'] div[class*='ito-font-family-uq']"
+        ),
+        image_selector=None,  # OG meta always carries the correct product image
+        currency="USD",
+    ),
+    "gapfactory.com": PlatformRule(
+        platform="gapfactory",
+        price_selector=(
+            "span.fds__core-web-purchase-price, "
+            "span.current-sale-price, "
+            ".pdp-title-price-wrapper .current-sale-price, "
+            "[itemprop='price']"
+        ),
+        title_selector=(
+            "h1.pdp-product-title, "
+            "h1[class*='pdp-product'], "
+            "h1[class*='fds__core-web-title'], "
+            "[itemprop='name']"
+        ),
+        image_selector="[class*='pdp-photo-single-column-image'] img, [class*='pdp__image-gallery'] img",
         currency="USD",
     ),
 }
@@ -138,7 +203,10 @@ def extract_by_rules(html: str, url: str) -> ProductData:
     data.title = _select_first_text(soup, rule.title_selector)
 
     if rule.image_selector:
-        data.image_url = _select_first_attr(soup, rule.image_selector, "src")
+        raw_img = _select_first_attr(soup, rule.image_selector, "src")
+        if raw_img:
+            # Resolve relative URLs against the page origin
+            data.image_url = urljoin(url, raw_img)
 
     return data
 
