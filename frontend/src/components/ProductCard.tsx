@@ -65,7 +65,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Product image */}
         <Link to={`/products/${product.id}`} className="block">
-          <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
+          <div className="aspect-square w-full overflow-hidden bg-muted">
             {product.image_url ? (
               <img
                 src={product.image_url}
@@ -82,10 +82,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         </Link>
 
         {/* Card body */}
-        <div className="flex flex-1 flex-col gap-2 p-3">
+        <div className="flex flex-1 flex-col gap-1.5 p-2.5">
           {/* Platform badge */}
           {product.platform && product.platform !== "generic" && (
-            <Badge variant="secondary" className="w-fit text-xs capitalize">
+            <Badge variant="secondary" className="w-fit text-[10px] capitalize">
               {product.platform}
             </Badge>
           )}
@@ -93,21 +93,21 @@ export default function ProductCard({ product }: ProductCardProps) {
           {/* Title */}
           <Link
             to={`/products/${product.id}`}
-            className="line-clamp-2 text-sm font-medium leading-snug hover:underline"
+            className="line-clamp-2 text-xs font-medium leading-snug hover:underline sm:text-sm"
           >
             {product.title ?? product.url}
           </Link>
 
           {/* Price */}
-          <p className="text-lg font-bold tabular-nums">
+          <p className="text-sm font-bold tabular-nums sm:text-base">
             {formatPrice(product.current_price, product.currency)}
           </p>
 
-          {/* Tags */}
+          {/* Tags — hidden on very small screens to save space */}
           {product.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="hidden flex-wrap gap-1 sm:flex">
               {product.tags.map((tag) => (
-                <Badge key={tag.id} variant="outline" className="text-xs">
+                <Badge key={tag.id} variant="outline" className="text-[10px]">
                   {tag.name}
                 </Badge>
               ))}
