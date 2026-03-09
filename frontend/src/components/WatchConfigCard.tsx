@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Save } from "lucide-react";
-import { upsertWatchConfig, type WatchConfig } from "@/api/client";
+import { Loader2, RefreshCw, Save } from "lucide-react";
+import { triggerPriceCheck, upsertWatchConfig, type WatchConfig } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,16 @@ export default function WatchConfigCard({ productId, initial }: WatchConfigCardP
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const checkMutation = useMutation({
+    mutationFn: () => triggerPriceCheck(productId),
+    onSuccess: () => {
+      toast({ title: "Price check queued — results will appear shortly" });
+    },
+    onError: () => {
+      toast({ title: "Failed to queue price check", variant: "destructive" });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -101,10 +111,26 @@ export default function WatchConfigCard({ productId, initial }: WatchConfigCardP
         </p>
       </div>
 
-      {/* Last checked */}
-      <p className="text-xs text-muted-foreground">
-        Last checked: <span className="font-medium text-foreground">{lastChecked}</span>
-      </p>
+      {/* Last checked + Check Now */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Last checked: <span className="font-medium text-foreground">{lastChecked}</span>
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => checkMutation.mutate()}
+          disabled={checkMutation.isPending}
+          className="h-7 shrink-0 text-xs"
+        >
+          {checkMutation.isPending ? (
+            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-1.5 h-3 w-3" />
+          )}
+          Check Now
+        </Button>
+      </div>
 
       <Button
         size="sm"

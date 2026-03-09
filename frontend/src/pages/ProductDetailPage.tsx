@@ -1,11 +1,14 @@
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, ShoppingBag } from "lucide-react";
-import { getProduct, getWatchConfig } from "@/api/client";
+import { getProduct, getWatchConfig, getTags, updateProductTags, suggestTags } from "@/api/client";
+import CookieImportCard from "@/components/CookieImportCard";
 import PriceChart from "@/components/PriceChart";
 import WatchConfigCard from "@/components/WatchConfigCard";
+import { TagInput } from "@/components/TagInput";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 function formatPrice(price: number | null, currency: string): string {
   if (price === null) return "—";
@@ -24,6 +27,8 @@ function formatDate(iso: string): string {
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: product, isLoading: loadingProduct } = useQuery({
     queryKey: ["product", id],
@@ -35,6 +40,21 @@ export default function ProductDetailPage() {
     queryKey: ["watch", id],
     queryFn: () => getWatchConfig(id!).then((r) => r.data),
     enabled: !!id,
+  });
+
+  const { data: allTags = [] } = useQuery({
+    queryKey: ["tags"],
+    queryFn: () => getTags().then((r) => r.data),
+  });
+
+  const tagMutation = useMutation({
+    mutationFn: (tags: string[]) => updateProductTags(id!, tags).then((r) => r.data),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["product", id], updated);
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      toast({ title: "Tags saved" });
+    },
+    onError: () => toast({ title: "Failed to save tags", variant: "destructive" }),
   });
 
   const isLoading = loadingProduct || loadingWatch;
@@ -112,12 +132,17 @@ export default function ProductDetailPage() {
                 {product.category && (
                   <Badge variant="outline">{product.category}</Badge>
                 )}
-                {product.tags.map((tag) => (
-                  <Badge key={tag.id} variant="outline" className="text-xs">
-                    {tag.name}
-                  </Badge>
-                ))}
               </div>
+
+              <TagInput
+                selected={product.tags.map((t) => t.name)}
+                onChange={(tags) => tagMutation.mutate(tags)}
+                suggestions={allTags}
+                saving={tagMutation.isPending}
+                onSuggest={() =>
+                  suggestTags(id!).then((r) => r.data.suggested_tags)
+                }
+              />
 
               <p className="text-xs text-muted-foreground">
                 Last updated: {formatDate(product.updated_at)}
@@ -142,6 +167,9 @@ export default function ProductDetailPage() {
         {id && (
           <WatchConfigCard productId={id} initial={watchConfig} />
         )}
+
+        {/* Cookie import */}
+        {product && <CookieImportCard product={product} />}
       </div>
     </div>
   );

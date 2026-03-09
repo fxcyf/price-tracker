@@ -91,6 +91,12 @@ const api = axios.create({
 export const getProducts = (params?: { category?: string; tag?: string }) =>
   api.get<Product[]>("/api/products", { params });
 
+export const getTags = () =>
+  api.get<string[]>("/api/tags");
+
+export const deleteTag = (name: string) =>
+  api.delete(`/api/tags/${encodeURIComponent(name)}`);
+
 export const getProduct = (id: string) =>
   api.get<Product>(`/api/products/${id}`);
 
@@ -99,6 +105,12 @@ export const createProduct = (url: string, tags: string[] = []) =>
 
 export const deleteProduct = (id: string) =>
   api.delete(`/api/products/${id}`);
+
+export const updateProductTags = (id: string, tags: string[]) =>
+  api.patch<Product>(`/api/products/${id}/tags`, { tags });
+
+export const suggestTags = (id: string) =>
+  api.post<{ suggested_tags: string[] }>(`/api/products/${id}/suggest-tags`);
 
 // ---------------------------------------------------------------------------
 // Parse preview
@@ -123,6 +135,13 @@ export const getWatchConfig = (id: string) =>
 
 export const upsertWatchConfig = (id: string, data: WatchConfigIn) =>
   api.put<WatchConfig>(`/api/products/${id}/watch`, data);
+
+// ---------------------------------------------------------------------------
+// Manual price check
+// ---------------------------------------------------------------------------
+
+export const triggerPriceCheck = (id: string) =>
+  api.post<{ status: string; task_id: string }>(`/api/products/${id}/check`);
 
 // ---------------------------------------------------------------------------
 // Cookies

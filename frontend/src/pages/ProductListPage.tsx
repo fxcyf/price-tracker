@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, ShoppingBag, X } from "lucide-react";
-import { getProducts } from "@/api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { deleteTag, getProducts, getTags } from "@/api/client";
 import ProductCard from "@/components/ProductCard";
 import AddProductModal from "@/components/AddProductModal";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,27 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const PRESET_TAGS = ["sale", "wishlist", "electronics", "clothing", "shoes", "home"];
-
 export default function ProductListPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [confirmDeleteTag, setConfirmDeleteTag] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: allTags = [] } = useQuery({
+    queryKey: ["tags"],
+    queryFn: () => getTags().then((r) => r.data),
+  });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: (name: string) => deleteTag(name),
+    onSuccess: (_data, name) => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      if (activeTag === name) setActiveTag(null);
+      setConfirmDeleteTag(null);
+    },
+  });
 
   const { data: products, isLoading, isError } = useQuery({
     queryKey: ["products", { category: categoryFilter || undefined, tag: activeTag ?? undefined }],
@@ -49,7 +64,7 @@ export default function ProductListPage() {
           {/* Category text filter */}
           <div className="relative">
             <Input
-              placeholder="Filter by category…"
+              placeholder="Filter by category name…"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="pr-8 text-sm"
@@ -65,25 +80,60 @@ export default function ProductListPage() {
             )}
           </div>
 
-          {/* Scrollable tag chips */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {PRESET_TAGS.map((tag) => (
-              <button key={tag} onClick={() => toggleTag(tag)} className="shrink-0">
-                <Badge
-                  variant={activeTag === tag ? "default" : "outline"}
-                  className="cursor-pointer capitalize transition-colors"
-                >
-                  {tag}
-                </Badge>
-              </button>
-            ))}
-          </div>
+          {/* Scrollable tag chips — only rendered when there are tags */}
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">Tags:</span>
+              {allTags.map((tag) =>
+                confirmDeleteTag === tag ? (
+                  <span
+                    key={tag}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-destructive bg-destructive/10 px-2 py-0.5 text-xs text-destructive"
+                  >
+                    Delete "{tag}"?
+                    <button
+                      onClick={() => deleteTagMutation.mutate(tag)}
+                      disabled={deleteTagMutation.isPending}
+                      className="font-semibold hover:underline ml-1"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteTag(null)}
+                      className="ml-0.5 text-destructive/60 hover:text-destructive"
+                      aria-label="Cancel"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ) : (
+                  <span key={tag} className="group relative shrink-0 inline-flex items-center">
+                    <button onClick={() => toggleTag(tag)}>
+                      <Badge
+                        variant={activeTag === tag ? "default" : "outline"}
+                        className="cursor-pointer capitalize transition-colors pr-5"
+                      >
+                        {tag}
+                      </Badge>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteTag(tag); }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      aria-label={`Delete tag ${tag}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </span>
+                )
+              )}
+            </div>
+          )}
         </div>
 
         {/* Content */}
         <div className="p-4">
           {isLoading && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonCard key={i} />
               ))}
@@ -111,7 +161,7 @@ export default function ProductListPage() {
           )}
 
           {!isLoading && !isError && products && products.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               {products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
@@ -128,12 +178,12 @@ export default function ProductListPage() {
 function SkeletonCard() {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
-      <Skeleton className="aspect-[4/3] w-full" />
-      <div className="space-y-2 p-3">
-        <Skeleton className="h-3 w-16" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-6 w-20" />
+      <Skeleton className="aspect-square w-full" />
+      <div className="space-y-1.5 p-2.5">
+        <Skeleton className="h-3 w-12" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-3/4" />
+        <Skeleton className="h-5 w-16" />
       </div>
     </div>
   );
