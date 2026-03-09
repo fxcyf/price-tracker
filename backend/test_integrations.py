@@ -148,7 +148,6 @@ def test_single_price_check():
 
 def test_email():
     header("Test: Email sending")
-    from app.notify.email import send_price_alert
     from app.core.config import get_settings
 
     settings = get_settings()
@@ -171,14 +170,34 @@ def test_email():
     info(f"Sending test email to: {recipient}  (set NOTIFY_EMAIL in Settings page to override)")
     info(f"SMTP host: {settings.smtp_host}:{settings.smtp_port}")
 
-    class FakeProduct:
-        title = "Test Product (Price Tracker Integration Test)"
-        url = "https://example.com/test-product"
-        currency = "USD"
+    from app.notify.email import send_price_digest
+
+    fake_alerts = [
+        {
+            "title": "Test Product A (Price Tracker Integration Test)",
+            "url": "https://example.com/product-a",
+            "image_url": None,
+            "currency": "USD",
+            "old_price": 100.00,
+            "new_price": 79.99,
+            "direction": "dropped",
+            "pct": 20.01,
+        },
+        {
+            "title": "Test Product B (Price Tracker Integration Test)",
+            "url": "https://example.com/product-b",
+            "image_url": None,
+            "currency": "USD",
+            "old_price": 50.00,
+            "new_price": 55.00,
+            "direction": "increased",
+            "pct": 10.00,
+        },
+    ]
 
     try:
-        send_price_alert(recipient, FakeProduct(), old_price=100.00, new_price=79.99)
-        ok(f"Email sent to {recipient}")
+        send_price_digest(recipient, fake_alerts)
+        ok(f"Digest email sent to {recipient}")
         ok("Check your inbox (and spam folder)")
     except Exception as e:
         fail(f"Email failed: {e}")
