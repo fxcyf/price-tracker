@@ -38,6 +38,7 @@ celerybeat.pid
 
 # Scratch / local test files
 backend/curl
+celerybeat-schedule
 
 # Node / Frontend
 node_modules/
