@@ -17,9 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.domain_rule import CookieStatus, DomainRule
 from app.scrapers.extractors.llm import extract_with_llm
 from app.scrapers.extractors.opengraph import extract_opengraph
-from app.scrapers.extractors.rules import extract_by_learned_rule, extract_by_rules
+from app.scrapers.extractors.rules import PLATFORM_RULES, _detect_platform, extract_by_learned_rule, extract_by_rules
 from app.scrapers.fetcher import CookiesExpiredError, SiteBlockedError, fetch_page, preprocess_html
-from app.scrapers.schemas import ProductData
+from app.scrapers.schemas import FieldTrace, ProductData, ScrapeDebug
 
 logger = logging.getLogger(__name__)
 
@@ -89,11 +89,46 @@ async def _mark_cookies_expired(db: AsyncSession, domain: str) -> None:
         logger.warning("Marked cookies as expired for domain: %s", domain)
 
 
-async def scrape_product(url: str, db: AsyncSession) -> ProductData:
-    """
-    Full product scrape: fetches the page, runs extraction, then normalizes
-    the category and suggests tags via LLM.
-    """
+# Fields tracked in the scrape trace (in display order)
+_TRACED_FIELDS = ("title", "price", "image_url", "brand", "category", "platform")
+
+
+def _track_fields(
+    before: ProductData,
+    after: ProductData,
+    layer: str,
+    selectors: dict[str, str | None],
+    accumulator: dict[str, tuple[str, str | None]],
+) -> None:
+    """Record which layer filled each field that transitioned from absent → present."""
+    for f in _TRACED_FIELDS:
+        if f in accumulator:
+            continue
+        before_val = getattr(before, f)
+        after_val = getattr(after, f)
+        # "platform" starts as "generic", treat that as absent
+        if f == "platform":
+            if before_val == "generic" and after_val != "generic":
+                accumulator[f] = (layer, selectors.get(f))
+        else:
+            if before_val is None and after_val is not None:
+                accumulator[f] = (layer, selectors.get(f))
+
+
+def _build_debug(
+    result: ProductData,
+    layers_run: list[str],
+    accumulator: dict[str, tuple[str, str | None]],
+) -> ScrapeDebug:
+    fields: dict[str, FieldTrace] = {}
+    for f in _TRACED_FIELDS:
+        source, selector = accumulator.get(f, ("missing", None))
+        fields[f] = FieldTrace(value=getattr(result, f), source=source, selector=selector)
+    return ScrapeDebug(layers_run=layers_run, fields=fields)
+
+
+async def scrape_product_with_debug(url: str, db: AsyncSession) -> tuple[ProductData, ScrapeDebug]:
+    """Full product scrape returning both the product data and a scrape trace for debugging."""
     domain = _get_domain(url)
     rule = await _get_learned_rule(db, domain)
     stored_cookies = (
@@ -111,20 +146,48 @@ async def scrape_product(url: str, db: AsyncSession) -> ProductData:
     return await extract_product_data(html, url, db)
 
 
-async def extract_product_data(html: str, url: str, db: AsyncSession) -> ProductData:
+async def scrape_product(url: str, db: AsyncSession) -> ProductData:
+    """
+    Full product scrape: fetches the page, runs extraction, then normalizes
+    the category and suggests tags via LLM.
+    """
+    data, _ = await scrape_product_with_debug(url, db)
+    return data
+
+
+async def extract_product_data(html: str, url: str, db: AsyncSession) -> tuple[ProductData, ScrapeDebug]:
     """Run the layered extraction pipeline on already-fetched HTML."""
     domain = _get_domain(url)
     result = ProductData(url=url)
+    layers_run: list[str] = []
+    accumulator: dict[str, tuple[str, str | None]] = {}
 
     # Layers 1–2b are all cheap (no network, no LLM); always run all of them so
     # that later layers can fill in fields (e.g. image) missed by earlier ones.
 
     # Layer 1: OpenGraph / JSON-LD
-    result = result.merge(extract_opengraph(html, url))
+    og_data = extract_opengraph(html, url)
+    new_result = result.merge(og_data)
+    layers_run.append("opengraph")
+    _track_fields(result, new_result, "opengraph", {}, accumulator)
+    result = new_result
     logger.debug("Layer 1 (OpenGraph) done for %s", url)
 
     # Layer 2a: Built-in platform rules
-    result = result.merge(extract_by_rules(html, url))
+    rules_data = extract_by_rules(html, url)
+    new_result = result.merge(rules_data)
+    layers_run.append("platform_rule")
+    platform_domain = _detect_platform(url)
+    platform_selectors: dict[str, str | None] = {}
+    if platform_domain and platform_domain in PLATFORM_RULES:
+        pr = PLATFORM_RULES[platform_domain]
+        platform_selectors = {
+            "price": pr.price_selector,
+            "title": pr.title_selector,
+            "image_url": pr.image_selector,
+        }
+    _track_fields(result, new_result, "platform_rule", platform_selectors, accumulator)
+    result = new_result
     logger.debug("Layer 2a (platform rules) done for %s", url)
 
     # Layer 2b: Learned domain rules
@@ -137,7 +200,14 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> Product
             learned_rule.title_selector,
             learned_rule.image_selector,
         )
-        result = result.merge(learned_data)
+        new_result = result.merge(learned_data)
+        layers_run.append("learned_rule")
+        _track_fields(result, new_result, "learned_rule", {
+            "price": learned_rule.price_selector,
+            "title": learned_rule.title_selector,
+            "image_url": learned_rule.image_selector,
+        }, accumulator)
+        result = new_result
         if result.is_complete():
             logger.debug("Layer 2b (learned rules) completed extraction for %s", url)
             learned_rule.success_count += 1
@@ -146,19 +216,26 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> Product
     # Skip the expensive LLM call when all cheap layers already found a price.
     if result.is_complete():
         logger.debug("Extraction complete after cheap layers for %s", url)
-        return result
+        return result, _build_debug(result, layers_run, accumulator)
 
     # Layer 3: LLM fallback
     logger.info("Falling back to LLM extraction for %s", url)
     preprocessed = preprocess_html(html)
     llm_data = await extract_with_llm(preprocessed, url)
-    result = result.merge(llm_data)
+    new_result = result.merge(llm_data)
+    layers_run.append("llm")
+    _track_fields(result, new_result, "llm", {
+        "price": llm_data.learned_price_selector,
+        "title": llm_data.learned_title_selector,
+        "image_url": llm_data.learned_image_selector,
+    }, accumulator)
+    result = new_result
 
     # Save selectors for future use
     if result.is_complete():
         await _save_learned_rule(db, domain, result)
 
-    return result
+    return result, _build_debug(result, layers_run, accumulator)
 
 
 async def scrape_price_only(url: str, db: AsyncSession) -> float | None:

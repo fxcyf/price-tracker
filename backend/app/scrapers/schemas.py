@@ -2,6 +2,21 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class FieldTrace:
+    """Debug info for a single extracted field."""
+    value: str | float | None
+    source: str  # "opengraph" | "platform_rule" | "learned_rule" | "llm" | "missing"
+    selector: str | None
+
+
+@dataclass
+class ScrapeDebug:
+    """Full trace of the scrape pipeline for debugging."""
+    layers_run: list[str]
+    fields: dict[str, FieldTrace]
+
+
+@dataclass
 class ProductData:
     """Structured product data extracted by the scraper pipeline."""
 

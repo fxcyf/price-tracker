@@ -27,6 +27,17 @@ export interface Product {
   updated_at: string;
 }
 
+export interface FieldDebug {
+  value: number | string | null;
+  source: string;
+  selector: string | null;
+}
+
+export interface ParseDebug {
+  layers_run: string[];
+  fields: Record<string, FieldDebug>;
+}
+
 export interface ParsePreview {
   url: string;
   title: string | null;
@@ -36,6 +47,7 @@ export interface ParsePreview {
   category: string | null;
   platform: string;
   is_complete: boolean;
+  debug?: ParseDebug;
 }
 
 export interface PricePoint {

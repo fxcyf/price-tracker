@@ -51,3 +51,11 @@ Pattern used in `ProductDetailPage`:
 - Wrap the component in `{import.meta.env.DEV && <DebugPanel ... />}` — zero cost in prod.
 - For data that lives inside child components (e.g. `PriceChart`), pass an optional `onQueryStatus?` callback prop and call it from a `useEffect` watching the query state. The parent only wires the callback when `import.meta.env.DEV` is true, keeping child components clean.
 - Avoid `useEffect` pitfalls: always list stable `useCallback` refs in deps rather than inline functions to prevent infinite loops.
+
+## Adding debug/trace data to an existing API response
+
+Pattern used for the scrape trace in `POST /api/parse`:
+- Keep the backend function signature stable by adding a parallel `_with_debug` variant that returns `tuple[Data, DebugInfo]`. The original function becomes a one-liner that unpacks and discards the debug. Existing callers are untouched.
+- Add the debug payload as an **optional field** (`debug: ... | None = None`) on the existing Pydantic response model — no breaking change to clients that don't consume it.
+- Build the trace **at the call site** (dispatcher layer boundaries) using a simple `_track_fields(before, after, layer, selectors, accumulator)` helper that records which layer first filled each field. This avoids polluting the core data model with debug metadata.
+- On the frontend, add the debug type as an optional interface field in `client.ts` and render only when `import.meta.env.DEV && data.debug`.
