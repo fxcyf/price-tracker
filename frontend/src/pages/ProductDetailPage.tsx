@@ -1,9 +1,12 @@
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, ShoppingBag } from "lucide-react";
-import { getProduct, getWatchConfig, getTags, updateProductTags, suggestTags } from "@/api/client";
+import { ArrowLeft, ChevronDown, ChevronUp, ExternalLink, Pencil, ShoppingBag, X } from "lucide-react";
+import { getProduct, getWatchConfig, getTags, updateProductTags, updateProductImage, suggestTags } from "@/api/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import CookieImportCard from "@/components/CookieImportCard";
-import PriceChart from "@/components/PriceChart";
+import PriceChart, { type QueryStatusInfo } from "@/components/PriceChart";
 import WatchConfigCard from "@/components/WatchConfigCard";
 import { TagInput } from "@/components/TagInput";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +60,30 @@ export default function ProductDetailPage() {
     onError: () => toast({ title: "Failed to save tags", variant: "destructive" }),
   });
 
+  const [editingImage, setEditingImage] = useState(false);
+  const [imageInputValue, setImageInputValue] = useState("");
+
+  function startEditImage() {
+    setImageInputValue(product?.image_url ?? "");
+    setEditingImage(true);
+  }
+
+  function cancelEditImage() {
+    setEditingImage(false);
+    setImageInputValue("");
+  }
+
+  const imageMutation = useMutation({
+    mutationFn: (url: string | null) => updateProductImage(id!, url).then((r) => r.data),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["product", id], updated);
+      setEditingImage(false);
+      setImageInputValue("");
+      toast({ title: "Image updated" });
+    },
+    onError: () => toast({ title: "Failed to update image", variant: "destructive" }),
+  });
+
   const isLoading = loadingProduct || loadingWatch;
 
   return (
@@ -99,16 +126,71 @@ export default function ProductDetailPage() {
         ) : product ? (
           <div className="flex gap-4 rounded-lg border bg-card p-4">
             {/* Image */}
-            <div className="h-24 w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:h-32 sm:w-32">
-              {product.image_url ? (
-                <img
-                  src={product.image_url}
-                  alt={product.title ?? "Product"}
-                  className="h-full w-full object-cover"
-                />
+            <div className="shrink-0">
+              {editingImage ? (
+                <div className="flex w-24 flex-col gap-2 sm:w-32">
+                  <div className="h-24 w-24 overflow-hidden rounded-md bg-muted sm:h-32 sm:w-32">
+                    {imageInputValue ? (
+                      <img
+                        src={imageInputValue}
+                        alt="Preview"
+                        className="h-full w-full object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+                      </div>
+                    )}
+                  </div>
+                  <Input
+                    type="url"
+                    placeholder="https://…"
+                    value={imageInputValue}
+                    onChange={(e) => setImageInputValue(e.target.value)}
+                    className="h-7 text-xs"
+                    autoFocus
+                  />
+                  <div className="flex gap-1.5">
+                    <Button
+                      size="sm"
+                      className="h-6 flex-1 text-xs"
+                      onClick={() => imageMutation.mutate(imageInputValue.trim() || null)}
+                      disabled={imageMutation.isPending}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2"
+                      onClick={cancelEditImage}
+                      disabled={imageMutation.isPending}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+                <div className="group relative h-24 w-24 overflow-hidden rounded-md bg-muted sm:h-32 sm:w-32">
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.title ?? "Product"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ShoppingBag className="h-8 w-8 text-muted-foreground/40" />
+                    </div>
+                  )}
+                  <button
+                    onClick={startEditImage}
+                    className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100"
+                    aria-label="Edit image"
+                  >
+                    <Pencil className="h-5 w-5 text-white" />
+                  </button>
                 </div>
               )}
             </div>

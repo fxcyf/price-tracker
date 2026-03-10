@@ -117,6 +117,9 @@ export const deleteProduct = (id: string) =>
 export const updateProductTags = (id: string, tags: string[]) =>
   api.patch<Product>(`/api/products/${id}/tags`, { tags });
 
+export const updateProductImage = (id: string, imageUrl: string | null) =>
+  api.patch<Product>(`/api/products/${id}/image`, { image_url: imageUrl });
+
 export const suggestTags = (id: string) =>
   api.post<{ suggested_tags: string[] }>(`/api/products/${id}/suggest-tags`);
 

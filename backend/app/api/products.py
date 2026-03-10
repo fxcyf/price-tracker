@@ -235,6 +235,24 @@ async def suggest_tags(product_id: uuid.UUID, db: DB):
     return TagSuggestionsOut(suggested_tags=suggested)
 
 
+class ImageUpdate(BaseModel):
+    image_url: str | None
+
+
+@router.patch("/products/{product_id}/image", response_model=ProductOut)
+async def update_product_image(product_id: uuid.UUID, body: ImageUpdate, db: DB):
+    """Update the image URL for a product."""
+    product = await _get_product_or_404(db, product_id)
+    product.image_url = body.image_url
+    await db.commit()
+    result = await db.execute(
+        select(Product)
+        .where(Product.id == product_id)
+        .options(selectinload(Product.tags))
+    )
+    return result.scalar_one()
+
+
 class TagsUpdate(BaseModel):
     tags: list[str]
 
