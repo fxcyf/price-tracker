@@ -25,6 +25,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --project-name de
 # Rebuild dev after code changes
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --project-name dev up --build
 
+# Rebuild prod after code changes (stays detached, Cloudflare tunnel unaffected)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --project-name prod up -d --build
+
 # Stop dev stack only
 docker compose --project-name dev down
 
@@ -39,3 +42,12 @@ docker compose --project-name dev down -v
 - **`SMTP_USER` is empty** in `.env.dev` so no real emails are sent while debugging.
 - **Direct backend access** on `:8001` lets you call the API without going through nginx — useful for `curl` / REST clients during debugging.
 - `.env.dev` is git-ignored (contains secrets); copy from `.env.dev` template when setting up on a new machine.
+
+## Frontend dev-only UI
+
+Vite exposes `import.meta.env.DEV` as a compile-time boolean (`true` in `vite dev`, `false` in `vite build`). Use it to gate debug UI that should never ship to production — the condition is tree-shaken out of the prod bundle entirely.
+
+Pattern used in `ProductDetailPage`:
+- Wrap the component in `{import.meta.env.DEV && <DebugPanel ... />}` — zero cost in prod.
+- For data that lives inside child components (e.g. `PriceChart`), pass an optional `onQueryStatus?` callback prop and call it from a `useEffect` watching the query state. The parent only wires the callback when `import.meta.env.DEV` is true, keeping child components clean.
+- Avoid `useEffect` pitfalls: always list stable `useCallback` refs in deps rather than inline functions to prevent infinite loops.
