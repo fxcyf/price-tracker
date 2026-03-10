@@ -9,6 +9,9 @@ export interface Tag {
   name: string;
 }
 
+export type SortBy = "date_added" | "price" | "brand";
+export type SortDir = "asc" | "desc";
+
 export interface Product {
   id: string;
   url: string;
@@ -89,8 +92,12 @@ const api = axios.create({
 // Products
 // ---------------------------------------------------------------------------
 
-export const getProducts = (params?: { category?: string; tag?: string }) =>
-  api.get<Product[]>("/api/products", { params });
+export const getProducts = (params?: {
+  category?: string;
+  tag?: string;
+  sort_by?: SortBy;
+  sort_dir?: SortDir;
+}) => api.get<Product[]>("/api/products", { params });
 
 export const getTags = () =>
   api.get<string[]>("/api/tags");

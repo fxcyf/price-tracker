@@ -13,15 +13,42 @@ Two navigation variants, each toggled with Tailwind's `lg:` breakpoint:
 <nav className="fixed bottom-0 left-0 right-0 lg:hidden">...</nav>
 ```
 
-## TanStack Query: Filtered Queries
+## TanStack Query: Filtered + Sorted Queries
 
-Include filter state in `queryKey`. TanStack Query re-fetches automatically when the key changes.
+Include all filter and sort state in `queryKey`. TanStack Query re-fetches automatically when the key changes. Sort state follows the same pattern as filter state — just add more fields to the key object.
 
 ```typescript
 const { data } = useQuery({
-  queryKey: ["products", { category, tag }],
-  queryFn: () => getProducts({ category, tag }).then(r => r.data),
+  queryKey: ["products", { category, tag, sort_by: sortBy, sort_dir: sortDir }],
+  queryFn: () => getProducts({ category, tag, sort_by: sortBy, sort_dir: sortDir }).then(r => r.data),
 });
+```
+
+Sort state is simple `useState` with typed values (use exported union types from `client.ts` to stay in sync with the API):
+
+```typescript
+const [sortBy, setSortBy] = useState<SortBy>("date_added");
+const [sortDir, setSortDir] = useState<SortDir>("desc");
+```
+
+## Sorting UI: Native Select + Toggle Button
+
+When shadcn/ui's `<Select>` component isn't installed, a styled native `<select>` matches the design system well. Use the same border/bg/ring Tailwind utilities as the `Input` component:
+
+```tsx
+<select
+  value={sortBy}
+  onChange={(e) => setSortBy(e.target.value as SortBy)}
+  className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+>
+  <option value="date_added">Date Added</option>
+  <option value="price">Price</option>
+  <option value="brand">Brand</option>
+</select>
+<Button variant="outline" size="sm" className="h-7 w-7 p-0"
+  onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")}>
+  {sortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+</Button>
 ```
 
 ## useMutation + Cache Invalidation

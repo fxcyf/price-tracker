@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, ShoppingBag, Trash2, X } from "lucide-react";
-import { deleteTag, getProducts, getTags } from "@/api/client";
+import { ArrowDown, ArrowUp, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { deleteTag, getProducts, getTags, type SortBy, type SortDir } from "@/api/client";
 import ProductCard from "@/components/ProductCard";
 import AddProductModal from "@/components/AddProductModal";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ export default function ProductListPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [confirmDeleteTag, setConfirmDeleteTag] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortBy>("date_added");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const queryClient = useQueryClient();
 
   const { data: allTags = [] } = useQuery({
@@ -32,11 +34,13 @@ export default function ProductListPage() {
   });
 
   const { data: products, isLoading, isError } = useQuery({
-    queryKey: ["products", { category: categoryFilter || undefined, tag: activeTag ?? undefined }],
+    queryKey: ["products", { category: categoryFilter || undefined, tag: activeTag ?? undefined, sort_by: sortBy, sort_dir: sortDir }],
     queryFn: () =>
       getProducts({
         category: categoryFilter || undefined,
         tag: activeTag ?? undefined,
+        sort_by: sortBy,
+        sort_dir: sortDir,
       }).then((r) => r.data),
   });
 
@@ -78,6 +82,33 @@ export default function ProductListPage() {
                 <X className="h-4 w-4" />
               </button>
             )}
+          </div>
+
+          {/* Sort controls */}
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="date_added">Date Added</option>
+              <option value="price">Price</option>
+              <option value="brand">Brand</option>
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              aria-label={sortDir === "asc" ? "Sort descending" : "Sort ascending"}
+            >
+              {sortDir === "asc" ? (
+                <ArrowUp className="h-3.5 w-3.5" />
+              ) : (
+                <ArrowDown className="h-3.5 w-3.5" />
+              )}
+            </Button>
           </div>
 
           {/* Scrollable tag chips — only rendered when there are tags */}

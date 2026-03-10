@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
+from sqlalchemy.sql.expression import nullslast
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB
@@ -163,14 +164,31 @@ async def create_product(body: ProductCreate, db: DB):
     return result.scalar_one()
 
 
+_SORT_COLUMNS = {
+    "date_added": Product.created_at,
+    "price": Product.current_price,
+    "brand": Product.brand,
+}
+
+
 @router.get("/products", response_model=list[ProductOut])
 async def list_products(
     db: DB,
     category: Annotated[str | None, Query()] = None,
     tag: Annotated[str | None, Query()] = None,
+    sort_by: Annotated[str, Query()] = "date_added",
+    sort_dir: Annotated[str, Query()] = "desc",
 ):
-    """List all tracked products with optional category or tag filter."""
-    stmt = select(Product).options(selectinload(Product.tags)).order_by(Product.created_at.desc())
+    """List all tracked products with optional category/tag filters and sorting."""
+    if sort_by not in _SORT_COLUMNS:
+        sort_by = "date_added"
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "desc"
+
+    col = _SORT_COLUMNS[sort_by]
+    order_expr = nullslast(col.asc() if sort_dir == "asc" else col.desc())
+
+    stmt = select(Product).options(selectinload(Product.tags)).order_by(order_expr)
 
     if category:
         stmt = stmt.where(Product.category.ilike(f"%{category}%"))
