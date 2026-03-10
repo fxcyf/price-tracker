@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronDown, ChevronUp, ExternalLink, Pencil, ShoppingBag, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, Pencil, ShoppingBag, X } from "lucide-react";
 import { getProduct, getWatchConfig, getTags, updateProductTags, updateProductImage, suggestTags } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CookieImportCard from "@/components/CookieImportCard";
-import PriceChart, { type QueryStatusInfo } from "@/components/PriceChart";
+import PriceChart from "@/components/PriceChart";
 import WatchConfigCard from "@/components/WatchConfigCard";
 import { TagInput } from "@/components/TagInput";
 import { Badge } from "@/components/ui/badge";
@@ -33,47 +33,22 @@ export default function ProductDetailPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const {
-    data: product,
-    isLoading: loadingProduct,
-    status: productStatus,
-    fetchStatus: productFetchStatus,
-    dataUpdatedAt: productUpdatedAt,
-    error: productError,
-  } = useQuery({
+  const { data: product, isLoading: loadingProduct } = useQuery({
     queryKey: ["product", id],
     queryFn: () => getProduct(id!).then((r) => r.data),
     enabled: !!id,
   });
 
-  const {
-    data: watchConfig,
-    isLoading: loadingWatch,
-    status: watchStatus,
-    fetchStatus: watchFetchStatus,
-    dataUpdatedAt: watchUpdatedAt,
-    error: watchError,
-  } = useQuery({
+  const { data: watchConfig, isLoading: loadingWatch } = useQuery({
     queryKey: ["watch", id],
     queryFn: () => getWatchConfig(id!).then((r) => r.data),
     enabled: !!id,
   });
 
-  const {
-    data: allTags = [],
-    status: tagsStatus,
-    fetchStatus: tagsFetchStatus,
-    dataUpdatedAt: tagsUpdatedAt,
-    error: tagsError,
-  } = useQuery({
+  const { data: allTags = [] } = useQuery({
     queryKey: ["tags"],
     queryFn: () => getTags().then((r) => r.data),
   });
-
-  const [priceHistoryQueryStatus, setPriceHistoryQueryStatus] = useState<QueryStatusInfo | null>(null);
-  const handlePriceQueryStatus = useCallback((info: QueryStatusInfo) => {
-    setPriceHistoryQueryStatus(info);
-  }, []);
 
   const tagMutation = useMutation({
     mutationFn: (tags: string[]) => updateProductTags(id!, tags).then((r) => r.data),
@@ -270,11 +245,7 @@ export default function ProductDetailPage() {
 
         {/* Price chart */}
         {id && product && (
-          <PriceChart
-            productId={id}
-            currency={product.currency}
-            onQueryStatus={import.meta.env.DEV ? handlePriceQueryStatus : undefined}
-          />
+          <PriceChart productId={id} currency={product.currency} />
         )}
 
         {/* Watch config */}
@@ -284,42 +255,6 @@ export default function ProductDetailPage() {
 
         {/* Cookie import */}
         {product && <CookieImportCard product={product} />}
-
-        {/* Debug panel — dev only */}
-        {import.meta.env.DEV && (
-          <DebugPanel
-            stages={[
-              {
-                label: "Product",
-                status: productStatus,
-                fetchStatus: productFetchStatus,
-                dataUpdatedAt: productUpdatedAt,
-                error: productError,
-              },
-              {
-                label: "Watch Config",
-                status: watchStatus,
-                fetchStatus: watchFetchStatus,
-                dataUpdatedAt: watchUpdatedAt,
-                error: watchError,
-              },
-              {
-                label: "Tags",
-                status: tagsStatus,
-                fetchStatus: tagsFetchStatus,
-                dataUpdatedAt: tagsUpdatedAt,
-                error: tagsError,
-              },
-              {
-                label: "Price History",
-                status: priceHistoryQueryStatus?.status ?? "pending",
-                fetchStatus: priceHistoryQueryStatus?.fetchStatus ?? "idle",
-                dataUpdatedAt: priceHistoryQueryStatus?.dataUpdatedAt ?? 0,
-                error: priceHistoryQueryStatus?.error ?? null,
-              },
-            ]}
-          />
-        )}
       </div>
     </div>
   );
@@ -339,107 +274,6 @@ function HeroSkeleton() {
         </div>
         <Skeleton className="h-3 w-36" />
       </div>
-    </div>
-  );
-}
-
-interface DebugStage {
-  label: string;
-  status: "pending" | "error" | "success";
-  fetchStatus: "fetching" | "paused" | "idle";
-  dataUpdatedAt: number;
-  error: unknown;
-}
-
-function useRelativeTime(ts: number): string {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (ts === 0) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, [ts]);
-  if (ts === 0) return "";
-  const secs = Math.floor((Date.now() - ts) / 1000);
-  if (secs < 2) return "just now";
-  if (secs < 60) return `${secs}s ago`;
-  return `${Math.floor(secs / 60)}m ago`;
-}
-
-function StageDot({ status, fetchStatus }: Pick<DebugStage, "status" | "fetchStatus">) {
-  if (fetchStatus === "fetching") {
-    return (
-      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
-    );
-  }
-  if (status === "success") {
-    return <span className="inline-block h-2 w-2 rounded-full bg-green-500" />;
-  }
-  if (status === "error") {
-    return <span className="inline-block h-2 w-2 rounded-full bg-red-500" />;
-  }
-  return <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40" />;
-}
-
-function StageRow({ stage }: { stage: DebugStage }) {
-  const relTime = useRelativeTime(stage.dataUpdatedAt);
-  const statusLabel =
-    stage.fetchStatus === "fetching"
-      ? "fetching…"
-      : stage.status === "success"
-      ? "success"
-      : stage.status === "error"
-      ? "error"
-      : "pending";
-
-  return (
-    <div className="flex items-center gap-3 font-mono text-xs">
-      <StageDot status={stage.status} fetchStatus={stage.fetchStatus} />
-      <span className="w-28 shrink-0 text-foreground">{stage.label}</span>
-      <span
-        className={
-          stage.fetchStatus === "fetching"
-            ? "text-yellow-500"
-            : stage.status === "success"
-            ? "text-green-500"
-            : stage.status === "error"
-            ? "text-red-500"
-            : "text-muted-foreground"
-        }
-      >
-        {statusLabel}
-      </span>
-      {relTime && (
-        <span className="ml-auto text-muted-foreground">{relTime}</span>
-      )}
-      {stage.status === "error" && !!stage.error && (
-        <span className="ml-2 truncate text-red-400">
-          {stage.error instanceof Error ? stage.error.message : String(stage.error)}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function DebugPanel({ stages }: { stages: DebugStage[] }) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="rounded-lg border border-dashed border-yellow-500/50 bg-yellow-500/5 p-3">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between text-xs font-semibold text-yellow-600 dark:text-yellow-400"
-      >
-        <span>DEV · Fetch Stages</span>
-        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
-
-      {open && (
-        <div className="mt-2.5 space-y-2">
-          {stages.map((stage) => (
-            <StageRow key={stage.label} stage={stage} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

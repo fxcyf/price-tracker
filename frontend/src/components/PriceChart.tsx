@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ResponsiveContainer,
@@ -13,17 +13,9 @@ import { TrendingDown } from "lucide-react";
 import { getPriceHistory } from "@/api/client";
 import { cn } from "@/lib/utils";
 
-export interface QueryStatusInfo {
-  status: "pending" | "error" | "success";
-  fetchStatus: "fetching" | "paused" | "idle";
-  dataUpdatedAt: number;
-  error: unknown;
-}
-
 interface PriceChartProps {
   productId: string;
   currency: string;
-  onQueryStatus?: (info: QueryStatusInfo) => void;
 }
 
 const DAY_OPTIONS = [
@@ -42,17 +34,13 @@ function formatPrice(value: number, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
 }
 
-export default function PriceChart({ productId, currency, onQueryStatus }: PriceChartProps) {
+export default function PriceChart({ productId, currency }: PriceChartProps) {
   const [dayRange, setDayRange] = useState<DayRange>(30);
 
-  const { data: points = [], isLoading, status, fetchStatus, dataUpdatedAt, error } = useQuery({
+  const { data: points = [], isLoading } = useQuery({
     queryKey: ["prices", productId, dayRange],
     queryFn: () => getPriceHistory(productId, dayRange).then((r) => r.data),
   });
-
-  useEffect(() => {
-    onQueryStatus?.({ status, fetchStatus, dataUpdatedAt, error });
-  }, [status, fetchStatus, dataUpdatedAt, error, onQueryStatus]);
 
   return (
     <div className="rounded-lg border bg-card p-4">
