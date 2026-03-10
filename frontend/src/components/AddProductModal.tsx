@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShoppingBag, AlertCircle, Cookie, Loader2 } from "lucide-react";
+import { ShoppingBag, AlertCircle, Clipboard, Cookie, Loader2 } from "lucide-react";
 import { parseUrl, createProduct, importCookies, getTags, type ParsePreview } from "@/api/client";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
@@ -151,15 +151,39 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
           <form onSubmit={handlePreview} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="product-url">Product URL</Label>
-              <Input
-                id="product-url"
-                type="url"
-                placeholder="https://www.example.com/product"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                required
-                autoFocus
-              />
+              <div className="relative">
+                <Input
+                  id="product-url"
+                  type="url"
+                  placeholder="https://www.example.com/product"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  required
+                  autoFocus
+                  className={!url && navigator.clipboard ? "pr-9" : ""}
+                />
+                {!url && navigator.clipboard && (
+                  <button
+                    type="button"
+                    aria-label="Paste URL from clipboard"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      navigator.clipboard.readText()
+                        .then((text) => {
+                          const trimmed = text.trim();
+                          if (trimmed.startsWith("http")) {
+                            setUrl(trimmed);
+                          } else {
+                            toast({ title: "Nothing URL-like in clipboard" });
+                          }
+                        })
+                        .catch(() => toast({ title: "Could not read clipboard" }));
+                    }}
+                  >
+                    <Clipboard className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {parseErrorMessage && (
