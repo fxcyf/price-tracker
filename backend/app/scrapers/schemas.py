@@ -11,6 +11,7 @@ class ProductData:
     currency: str = "USD"
     image_url: str | None = None
     category: str | None = None
+    brand: str | None = None
     platform: str = "generic"
 
     # CSS selectors returned by LLM (used to populate domain_rules)
@@ -34,6 +35,7 @@ class ProductData:
             currency=self.currency or other.currency,
             image_url=self.image_url or other.image_url,
             category=self.category or other.category,
+            brand=self.brand or other.brand,
             platform=self.platform if self.platform != "generic" else other.platform,
             learned_price_selector=self.learned_price_selector or other.learned_price_selector,
             learned_title_selector=self.learned_title_selector or other.learned_title_selector,

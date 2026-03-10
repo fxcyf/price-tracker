@@ -21,6 +21,7 @@ Return ONLY valid JSON with this exact structure:
   "price": 29.99,
   "currency": "USD",
   "category": "category or null",
+  "brand": "brand name or null",
   "image_url": "url or null",
   "selectors": {
     "price": "CSS selector that contains the price, or null",
@@ -32,6 +33,7 @@ Return ONLY valid JSON with this exact structure:
 Rules:
 - price must be a number (not a string), or null if not found
 - currency should be the ISO 4217 code (USD, CNY, EUR, etc.)
+- brand should be the manufacturer or brand name only (e.g. "Nike", "Apple"), or null if not found
 - For selectors, use the most specific stable selector (prefer id or data attributes over generic classes)
 - If you cannot find a field, set it to null
 """
@@ -106,6 +108,7 @@ async def extract_with_llm(preprocessed_text: str, url: str) -> ProductData:
         currency=str(payload.get("currency") or "USD").upper(),
         image_url=payload.get("image_url"),
         category=payload.get("category"),
+        brand=payload.get("brand") or None,
         learned_price_selector=selectors.get("price"),
         learned_title_selector=selectors.get("title"),
         learned_image_selector=selectors.get("image"),

@@ -129,6 +129,9 @@ export default function ProductDetailPage() {
                     {product.platform}
                   </Badge>
                 )}
+                {product.brand && (
+                  <Badge variant="secondary">{product.brand}</Badge>
+                )}
                 {product.category && (
                   <Badge variant="outline">{product.category}</Badge>
                 )}

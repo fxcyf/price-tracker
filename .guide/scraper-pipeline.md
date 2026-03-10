@@ -74,6 +74,25 @@ Signal that a site needs this treatment: httpx returns title/image (from OG tags
 
 Some sites (Gap Factory/Banana Republic) serve product images with relative paths (`/webcontent/...`). `_select_first_attr` returns the raw `src` attribute unchanged. The `extract_by_rules` function now calls `urljoin(url, raw_img)` to resolve them to absolute URLs.
 
+## Adding New Fields to the Pipeline
+
+When adding a new product data field (like `brand`):
+
+1. Add the field to `ProductData` in `schemas.py` and wire it into `merge()`.
+2. Extract it in `opengraph.py` from the cheapest sources first: JSON-LD structured data, OG meta tags, `itemprop` microdata.
+3. Add it to the LLM `SYSTEM_PROMPT` as a last-resort fallback — only runs when price is still missing after cheap layers.
+4. Add it to the SQLAlchemy model and create an Alembic migration (nullable, no data migration needed for new optional fields).
+5. Add it to the FastAPI `ProductOut` Pydantic schema and the `create_product` handler.
+
+**JSON-LD brand extraction pattern** (schema.org `Product.brand` can be a string, `Brand` dict, or list):
+```python
+def _extract_brand(value) -> str | None:
+    if isinstance(value, str): return value or None
+    if isinstance(value, dict): return value.get("name") or value.get("@id") or None
+    if isinstance(value, list) and value: return _extract_brand(value[0])
+    return None
+```
+
 ## Bad Case Workflow
 
 1. Add the URL to `backend/tests/badcase/url.md` with the symptom (price/title/image not found, or blocked).

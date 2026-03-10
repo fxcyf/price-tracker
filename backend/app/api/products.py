@@ -59,6 +59,7 @@ class ProductOut(BaseModel):
     image_url: str | None
     category: str | None
     platform: str | None
+    brand: str | None
     current_price: float | None
     currency: str
     tags: list[TagOut]
@@ -134,6 +135,7 @@ async def create_product(body: ProductCreate, db: DB):
         image_url=data.image_url,
         category=data.category,
         platform=data.platform,
+        brand=data.brand,
         current_price=data.price,
         currency=data.currency,
         tags=tags,

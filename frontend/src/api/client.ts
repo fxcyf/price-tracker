@@ -16,6 +16,7 @@ export interface Product {
   image_url: string | null;
   category: string | null;
   platform: string | null;
+  brand: string | null;
   current_price: number | null;
   currency: string;
   tags: Tag[];
