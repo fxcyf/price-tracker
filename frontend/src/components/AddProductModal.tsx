@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShoppingBag, AlertCircle, Clipboard, Cookie, Loader2 } from "lucide-react";
-import { parseUrl, createProduct, importCookies, getTags, type ParsePreview } from "@/api/client";
+import { ShoppingBag, AlertCircle, Clipboard, Cookie, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { parseUrl, createProduct, importCookies, getTags, type ParseDebug, type ParsePreview } from "@/api/client";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,9 @@ function parseDomain(url: string): string {
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export default function AddProductModal({ open, onOpenChange }: AddProductModalProps) {
+  const [searchParams] = useSearchParams();
+  const debugMode = searchParams.has("debug");
+
   const [step, setStep] = useState<Step>("url");
   const [url, setUrl] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -63,7 +67,7 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
           setUrl(trimmed);
         }
       })
-      .catch(() => {}); // permission denied or API unavailable — silent
+      .catch(() => { }); // permission denied or API unavailable — silent
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const parseMutation = useMutation({
@@ -134,8 +138,8 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
   const parseErrorMessage = isBlocked
     ? "Site is blocked or cookies have expired."
     : parseMutation.isError
-    ? "Failed to fetch the URL. Please check it and try again."
-    : null;
+      ? "Failed to fetch the URL. Please check it and try again."
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -340,6 +344,12 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
               </div>
             )}
 
+            {/* Scrape trace — dev only */}
+            {/* Scrape trace — shown when ?debug is in the URL */}
+            {debugMode && preview.debug && (
+              <ScrapeDebugPanel debug={preview.debug} />
+            )}
+
             {/* Tags */}
             <div className="space-y-2">
               <Label>Tags (optional)</Label>
@@ -370,5 +380,76 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Scrape debug panel (dev only) ─────────────────────────────────────────────
+
+const SOURCE_STYLES: Record<string, { label: string; className: string }> = {
+  opengraph: { label: "OpenGraph", className: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
+  platform_rule: { label: "CSS rule", className: "bg-purple-500/15 text-purple-600 dark:text-purple-400" },
+  learned_rule: { label: "Learned rule", className: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
+  llm: { label: "LLM", className: "bg-pink-500/15 text-pink-600 dark:text-pink-400" },
+  missing: { label: "missing", className: "bg-muted text-muted-foreground" },
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  price: "Price",
+  image_url: "Image URL",
+  brand: "Brand",
+  category: "Category",
+  platform: "Platform",
+};
+
+function ScrapeDebugPanel({ debug }: { debug: ParseDebug }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-dashed border-yellow-500/50 bg-yellow-500/5 p-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-xs font-semibold text-yellow-600 dark:text-yellow-400"
+      >
+        <span>
+          DEV · Scrape Trace
+          <span className="ml-2 font-normal text-yellow-500/70">
+            {debug.layers_run.join(" → ")}
+          </span>
+        </span>
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+
+      {open && (
+        <div className="mt-2.5 space-y-1.5">
+          {Object.entries(FIELD_LABELS).map(([key, label]) => {
+            const field = debug.fields[key];
+            if (!field) return null;
+            const style = SOURCE_STYLES[field.source] ?? SOURCE_STYLES.missing;
+            const displayValue =
+              field.value === null || field.value === undefined
+                ? <span className="text-muted-foreground/50">—</span>
+                : <span className="truncate">{String(field.value)}</span>;
+
+            return (
+              <div key={key} className="grid grid-cols-[72px_80px_1fr] items-start gap-2 font-mono text-xs">
+                <span className="text-muted-foreground">{label}</span>
+                <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}>
+                  {style.label}
+                </span>
+                <div className="min-w-0 space-y-0.5">
+                  <div className="truncate text-foreground">{displayValue}</div>
+                  {field.selector && (
+                    <div className="truncate text-[10px] text-muted-foreground/70">
+                      {field.selector}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
