@@ -19,14 +19,14 @@ Two isolated Docker Compose stacks on the same machine, different project names 
 # Start/keep production running (Cloudflare tunnel points here)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --project-name prod up -d
 
+# Rebuild prod after code changes (stays detached, Cloudflare tunnel unaffected)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --project-name prod up -d --build
+
 # Start local dev stack (debug freely, won't affect online users)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --project-name dev up
 
 # Rebuild dev after code changes
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --project-name dev up --build
-
-# Rebuild prod after code changes (stays detached, Cloudflare tunnel unaffected)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml --project-name prod up -d --build
 
 # Stop dev stack only
 docker compose --project-name dev down

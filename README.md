@@ -70,6 +70,9 @@ npm run build   # outputs to frontend/dist/
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --project-name prod up -d
+
+# Restart
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --project-name prod up -d --build
 ```
 
 The app is now available at `http://localhost` (port 80).
