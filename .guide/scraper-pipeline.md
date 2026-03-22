@@ -137,7 +137,7 @@ def _extract_brand(value) -> str | None:
 
 ## Bad Case Workflow
 
-1. Add the URL to `backend/tests/badcase/url.md` with the symptom (price/title/image not found, or blocked).
+1. Add the URL to `backend/tests/badcase/url.txt` with the symptom (price/title/image not found, blocked, or needs cookies).
 2. Diagnose which layer fails: check if it's a fetch block, missing platform rule, stale selector, or OG gap.
 3. Fix in priority order: CSS rule > OG fallback > LLM prompt/context.
 4. Sites behind Akamai/PerimeterX require user-imported cookies — no code fix possible.
