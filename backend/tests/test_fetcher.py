@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.scrapers.fetcher import _is_blocked, _looks_complete, fetch_page, preprocess_html
+from app.scrapers.fetcher import (
+    CookiesExpiredError,
+    SiteBlockedError,
+    _is_blocked,
+    fetch_page,
+    fetch_with_stored_cookies,
+    preprocess_html,
+)
 
 
 class TestPreprocessHtml:
@@ -89,13 +96,54 @@ class TestBlockedAndCompleteSignals:
     def test_is_blocked_false(self, html):
         assert _is_blocked(html) is False
 
-    def test_looks_complete_requires_minimum_size(self):
-        assert _looks_complete("x" * 3000) is False
-        assert _looks_complete("x" * 5000) is True
-
-    def test_looks_complete_rejects_blocked_page(self):
+    def test_is_blocked_rejects_blocked_page(self):
         html = ("x" * 6000) + " Robot Check "
-        assert _looks_complete(html) is False
+        assert _is_blocked(html) is True
+
+
+class TestFetchWithStoredCookies:
+    @pytest.mark.asyncio
+    async def test_returns_short_non_blocked_html_when_cookie_fetch_succeeds(self):
+        class _Resp:
+            status_code = 200
+            text = "<html><body><h1>Product</h1><span>$19.99</span></body></html>"
+
+        class _Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url):
+                return _Resp()
+
+        with patch("app.scrapers.fetcher.httpx.AsyncClient", return_value=_Client()):
+            html = await fetch_with_stored_cookies("https://shop.example.com/p/1", {"sid": "abc"})
+
+        assert "Product" in html
+
+    @pytest.mark.asyncio
+    async def test_raises_cookie_expired_on_403(self):
+        class _Resp:
+            status_code = 403
+            text = "<html>forbidden</html>"
+
+        class _Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url):
+                return _Resp()
+
+        with (
+            patch("app.scrapers.fetcher.httpx.AsyncClient", return_value=_Client()),
+            pytest.raises(CookiesExpiredError),
+        ):
+            await fetch_with_stored_cookies("https://shop.example.com/p/1", {"sid": "abc"})
 
 
 class TestFetchPageRouting:
@@ -150,3 +198,31 @@ class TestFetchPageRouting:
         assert result == "pw-html"
         mock_httpx.assert_not_awaited()
         mock_pw.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_uses_playwright_with_cookies_for_js_heavy_domain(self):
+        with (
+            patch("app.scrapers.fetcher.fetch_with_stored_cookies", new=AsyncMock(return_value="cookie-html")) as mock_cookies,
+            patch("app.scrapers.fetcher.fetch_with_httpx", new=AsyncMock(return_value="httpx-html")) as mock_httpx,
+            patch("app.scrapers.fetcher.fetch_with_playwright", new=AsyncMock(return_value="pw-html")) as mock_pw,
+        ):
+            result = await fetch_page("https://www.freepeople.com/shop/item", stored_cookies={"sid": "abc"})
+
+        assert result == "pw-html"
+        mock_cookies.assert_not_awaited()
+        mock_httpx.assert_not_awaited()
+        mock_pw.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_cookie_httpx_when_playwright_blocked_for_js_heavy_domain(self):
+        with (
+            patch("app.scrapers.fetcher.fetch_with_stored_cookies", new=AsyncMock(return_value="cookie-html")) as mock_cookies,
+            patch("app.scrapers.fetcher.fetch_with_httpx", new=AsyncMock(return_value="httpx-html")) as mock_httpx,
+            patch("app.scrapers.fetcher.fetch_with_playwright", new=AsyncMock(side_effect=SiteBlockedError("blocked"))) as mock_pw,
+        ):
+            result = await fetch_page("https://www.freepeople.com/shop/item", stored_cookies={"sid": "abc"})
+
+        assert result == "cookie-html"
+        mock_pw.assert_awaited_once()
+        mock_cookies.assert_awaited_once()
+        mock_httpx.assert_not_awaited()

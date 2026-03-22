@@ -157,6 +157,55 @@ PLATFORM_RULES: dict[str, PlatformRule] = {
         ),
         currency="USD",
     ),
+    "urbanoutfitters.com": PlatformRule(
+        platform="urbanoutfitters",
+        price_selector=(
+            "[data-test='productDescriptionPriceSection'] [data-test='price'], "
+            "[class*='c-prc-s'], "
+            "[itemprop='price']"
+        ),
+        title_selector=(
+            "h1.c-heading-page, "
+            "h1[class*='c-heading'], "
+            "h1[itemprop='name']"
+        ),
+        image_selector="[data-test='product-image-media-section'] img",
+        currency="USD",
+    ),
+    "freepeople.com": PlatformRule(
+        platform="freepeople",
+        price_selector=(
+            "[data-test='productDescriptionPriceSection'] [data-test='price'], "
+            "[class*='c-prc-s'], "
+            "[itemprop='price']"
+        ),
+        title_selector=(
+            "h1.c-heading-page, "
+            "h1[class*='c-heading'], "
+            "h1[itemprop='name']"
+        ),
+        image_selector="[data-test='product-image-media-section'] img",
+        currency="USD",
+    ),
+    "aritzia.com": PlatformRule(
+        platform="aritzia",
+        price_selector=(
+            "[class*='product-price'] [class*='sale'], "
+            "[class*='product-price'] [class*='regular'], "
+            "[class*='e-pdp-productPrice'], "
+            "[itemprop='price']"
+        ),
+        title_selector=(
+            "h1[class*='product-name'], "
+            "h1[class*='e-pdp-productName'], "
+            "h1[itemprop='name']"
+        ),
+        image_selector=(
+            "[class*='pdp-image'] img, "
+            "[class*='product-image'] img"
+        ),
+        currency="USD",
+    ),
 }
 
 

@@ -43,6 +43,16 @@ PLAYWRIGHT_REQUIRED_DOMAINS = {
     # the LLM with ~4KB of nav text and no price. Playwright renders the full
     # React DOM so the price is visible as actual text.
     "jcrew.com",
+    # JS-heavy storefronts that frequently need rendered DOM.
+    "freepeople.com",
+    "urbanoutfitters.com",
+    "aritzia.com",
+    # React SPA: httpx returns the JS bundle shell; price lives in rendered DOM.
+    "homedepot.com",
+    # Shopify-based storefront; product data is JS-injected.
+    "maisonkitsune.com",
+    # Magento Venia PWA: httpx gets "JavaScript is disabled" shell page.
+    "tntsupermarket.us",
 }
 
 BLOCKED_SIGNALS = [
@@ -102,6 +112,66 @@ async def _sleep_retry_delay(attempt: int) -> None:
     await asyncio.sleep(delay)
 
 
+async def fetch_with_curl_cffi(url: str, cookies: dict) -> str | None:
+    """
+    Cookie-backed fetch using curl_cffi Chrome TLS impersonation.
+
+    PerimeterX and similar systems cryptographically bind their session cookies
+    (_px3, etc.) to the TLS fingerprint of the originating browser. httpx produces
+    a different JA3/JA4 fingerprint, so cookie replay via httpx is rejected even
+    when the cookies are valid. curl_cffi with ``impersonate="chrome"`` reproduces
+    Chrome's exact TLS/HTTP2 handshake, making the fingerprint match and allowing
+    the server-side cookie validation to pass.
+
+    Returns HTML on success, None if curl_cffi is unavailable or the request failed.
+    Raises CookiesExpiredError when the response signals the cookies are invalid.
+    """
+    try:
+        from curl_cffi.requests import AsyncSession as CurlSession
+    except ImportError:
+        logger.debug("curl_cffi not available; skipping TLS-impersonation fetch for %s", url)
+        return None
+
+    domain = (urlparse(url).hostname or "").removeprefix("www.")
+    for attempt in range(FETCH_RETRY_ATTEMPTS + 1):
+        try:
+            async with CurlSession(impersonate="chrome") as session:
+                response = await session.get(
+                    url,
+                    headers=HEADERS,
+                    cookies=cookies,
+                    allow_redirects=True,
+                    timeout=FETCH_HTTP_TIMEOUT_SECONDS,
+                )
+                html = response.text
+
+                if response.status_code in (403, 401) or _is_blocked(html):
+                    raise CookiesExpiredError(domain)
+
+                if response.status_code < 400:
+                    logger.debug(
+                        "curl_cffi fetch succeeded for %s (len=%d)", url, len(html)
+                    )
+                    return html
+
+                return None
+        except CookiesExpiredError:
+            raise
+        except Exception as exc:
+            logger.debug(
+                "curl_cffi fetch failed for %s (attempt %s/%s): %s",
+                url,
+                attempt + 1,
+                FETCH_RETRY_ATTEMPTS + 1,
+                exc,
+            )
+            if _should_retry(attempt):
+                await _sleep_retry_delay(attempt)
+                continue
+            return None
+    return None
+
+
 async def fetch_with_stored_cookies(url: str, cookies: dict) -> str | None:
     """
     Attempt a fast httpx fetch using user-imported cookies (e.g. from a real browser).
@@ -123,8 +193,18 @@ async def fetch_with_stored_cookies(url: str, cookies: dict) -> str | None:
                 if response.status_code in (403, 401) or _is_blocked(html):
                     raise CookiesExpiredError(domain)
 
-                if _looks_complete(html):
-                    logger.debug("fetch_with_stored_cookies succeeded for %s", url)
+                # For user-imported cookies, a successful non-blocked response is already
+                # valuable, even if HTML is shorter than our generic anonymous threshold.
+                # Returning it avoids unnecessary Playwright fallback that can hit bot walls.
+                if response.status_code < 400:
+                    if not _looks_complete(html):
+                        logger.debug(
+                            "fetch_with_stored_cookies got short but usable HTML for %s (len=%d)",
+                            url,
+                            len(html),
+                        )
+                    else:
+                        logger.debug("fetch_with_stored_cookies succeeded for %s", url)
                     return html
 
                 return None
@@ -178,20 +258,47 @@ async def fetch_with_httpx(url: str) -> str | None:
     return None
 
 
-async def fetch_with_playwright(url: str) -> str:
+def _cookies_for_playwright(url: str, cookies: dict | None) -> list[dict]:
+    if not cookies:
+        return []
+    hostname = urlparse(url).hostname or ""
+    normalized = hostname.removeprefix("www.")
+    cookie_domain = f".{normalized}" if normalized else hostname
+    return [
+        {
+            "name": name,
+            "value": value,
+            "domain": cookie_domain,
+            "path": "/",
+        }
+        for name, value in cookies.items()
+    ]
+
+
+async def fetch_with_playwright(url: str, stored_cookies: dict | None = None) -> str:
     """Full browser fetch using a persistent Playwright context with stealth."""
     import os
     from playwright.async_api import async_playwright
-    from playwright_stealth import Stealth
+    try:
+        from playwright_stealth import Stealth
+    except ImportError:  # pragma: no cover - depends on runtime environment
+        Stealth = None
 
     # Each process gets its own profile dir to avoid lock contention between
     # concurrent Celery ForkPoolWorkers sharing the same filesystem path.
     profile_dir = BROWSER_PROFILE_DIR / str(os.getpid())
     profile_dir.mkdir(parents=True, exist_ok=True)
-    stealth = Stealth(
-        navigator_user_agent_override=HEADERS["User-Agent"],
-        navigator_platform_override="Linux x86_64",
-    )
+    stealth = None
+    if Stealth is not None:
+        stealth = Stealth(
+            navigator_user_agent_override=HEADERS["User-Agent"],
+            navigator_platform_override="Linux x86_64",
+        )
+    else:
+        logger.warning(
+            "playwright_stealth is not installed; continuing without stealth for %s",
+            url,
+        )
 
     for attempt in range(FETCH_RETRY_ATTEMPTS + 1):
         try:
@@ -210,7 +317,11 @@ async def fetch_with_playwright(url: str) -> str:
                     },
                     args=["--disable-blink-features=AutomationControlled"],
                 )
-                await stealth.apply_stealth_async(context)
+                playwright_cookies = _cookies_for_playwright(url, stored_cookies)
+                if playwright_cookies:
+                    await context.add_cookies(playwright_cookies)
+                if stealth is not None:
+                    await stealth.apply_stealth_async(context)
                 page = await context.new_page()
                 try:
                     origin = f"{urlparse(url).scheme}://{urlparse(url).hostname}"
@@ -251,17 +362,47 @@ async def fetch_with_playwright(url: str) -> str:
 async def fetch_page(url: str, stored_cookies: dict | None = None) -> str:
     """
     Fetch a page's HTML. Priority order:
-      1. Stored user cookies (httpx) — fastest, works for PerimeterX-protected sites
-      2. Anonymous httpx — fast, works for most sites
-      3. Playwright with persistent profile — handles JS rendering and light bot protection
+      1. curl_cffi + cookies — Chrome TLS impersonation, bypasses PerimeterX/Cloudflare
+         cookie validation that rejects httpx's different TLS fingerprint
+      2. Playwright + cookies — full browser render with session cookies injected
+      3. Anonymous httpx — fast, works for most non-SPA sites
+      4. Playwright (anonymous) — handles JS rendering and light bot protection
     """
     domain = (urlparse(url).hostname or "").removeprefix("www.")
     needs_playwright = any(domain == d or domain.endswith(f".{d}") for d in PLAYWRIGHT_REQUIRED_DOMAINS)
 
-    # Layer 0: user-imported cookies (bypasses PerimeterX, Cloudflare with session)
+    # Layer 0: user cookies via curl_cffi (Chrome TLS impersonation).
+    # This is the most reliable path for PerimeterX/Cloudflare-protected sites:
+    # the JA3/JA4 fingerprint matches Chrome, so the server-side cookie validation passes.
+    # CookiesExpiredError propagates up — caller handles notification.
     if stored_cookies:
+        html = await fetch_with_curl_cffi(url, stored_cookies)
+        if html:
+            return html
+        # curl_cffi unavailable (returned None without raising) — fall through.
+        # If cookies were expired/blocked, CookiesExpiredError was already raised above.
+
+    # Layer 0b: JS-heavy domains with imported cookies — browser render with session injected.
+    # Used as a fallback when curl_cffi is not installed.
+    if stored_cookies and needs_playwright:
+        logger.info("curl_cffi unavailable; using Playwright with stored cookies for %s", url)
+        try:
+            return await fetch_with_playwright(url, stored_cookies=stored_cookies)
+        except SiteBlockedError:
+            # Some anti-bot stacks dislike headless execution even with valid cookies.
+            # Retry once with cookie-backed httpx before surfacing a hard block.
+            logger.info(
+                "Playwright+cookies blocked for %s, retrying with cookie-httpx",
+                url,
+            )
+            html = await fetch_with_stored_cookies(url, stored_cookies)
+            if html:
+                return html
+            raise
+
+    # Layer 0c: non-JS-heavy sites with cookies but no curl_cffi — plain httpx fallback.
+    if stored_cookies and not needs_playwright:
         html = await fetch_with_stored_cookies(url, stored_cookies)
-        # CookiesExpiredError propagates up — caller handles notification
         if html:
             return html
 
