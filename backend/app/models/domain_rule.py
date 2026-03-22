@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -28,18 +31,18 @@ class DomainRule(Base):
     domain: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
 
     # LLM-learned CSS selectors
-    price_selector: Mapped[str | None] = mapped_column(Text)
-    title_selector: Mapped[str | None] = mapped_column(Text)
-    image_selector: Mapped[str | None] = mapped_column(Text)
+    price_selector: Mapped[Optional[str]] = mapped_column(Text)
+    title_selector: Mapped[Optional[str]] = mapped_column(Text)
+    image_selector: Mapped[Optional[str]] = mapped_column(Text)
     success_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # User-imported cookies for bot-protected sites
     # Stored as JSON dict: {"_px3": "...", "bm_sz": "...", ...}
-    cookies: Mapped[dict | None] = mapped_column(JSONB)
+    cookies: Mapped[Optional[dict]] = mapped_column(JSONB)
     cookies_status: Mapped[str] = mapped_column(
         String(20), default=CookieStatus.NONE, nullable=False
     )
-    cookies_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cookies_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -20,7 +23,7 @@ class WatchConfig(Base):
         comment="Trigger alert when price drops by this percentage"
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

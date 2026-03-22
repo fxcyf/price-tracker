@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Layer 3: LLM-based extraction as a fallback. Also returns CSS selectors for future reuse."""
 
 import json
