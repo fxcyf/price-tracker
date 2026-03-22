@@ -120,8 +120,8 @@ export const deleteTag = (name: string) =>
 export const getProduct = (id: string) =>
   api.get<Product>(`/api/products/${id}`);
 
-export const createProduct = (url: string, tags: string[] = []) =>
-  api.post<Product>("/api/products", { url, tags });
+export const createProduct = (url: string, tags: string[] = [], saveAnyway = false) =>
+  api.post<Product>("/api/products", { url, tags, save_anyway: saveAnyway });
 
 export const deleteProduct = (id: string) =>
   api.delete(`/api/products/${id}`);

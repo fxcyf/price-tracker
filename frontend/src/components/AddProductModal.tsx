@@ -79,8 +79,8 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
   });
 
   const createMutation = useMutation({
-    mutationFn: ({ u, tags }: { u: string; tags: string[] }) =>
-      createProduct(u, tags).then((r) => r.data),
+    mutationFn: ({ u, tags, saveAnyway = false }: { u: string; tags: string[]; saveAnyway?: boolean }) =>
+      createProduct(u, tags, saveAnyway).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -130,7 +130,7 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
   }
 
   function handleConfirm() {
-    createMutation.mutate({ u: url.trim(), tags: selectedTags });
+    createMutation.mutate({ u: url.trim(), tags: selectedTags, saveAnyway: false });
   }
 
   const parseError = parseMutation.error as { response?: { status?: number } } | null;
@@ -214,7 +214,7 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
                       variant="outline"
                       className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                       disabled={createMutation.isPending}
-                      onClick={() => createMutation.mutate({ u: url.trim(), tags: [] })}
+                      onClick={() => createMutation.mutate({ u: url.trim(), tags: [], saveAnyway: true })}
                     >
                       {createMutation.isPending
                         ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Saving…</>

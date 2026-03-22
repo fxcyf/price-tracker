@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -14,6 +16,7 @@ from app.models.product import Product, Tag
 from app.models.watch_config import WatchConfig
 from app.scrapers.dispatcher import scrape_product
 from app.scrapers.fetcher import CookiesExpiredError, SiteBlockedError
+from app.scrapers.schemas import ProductData
 
 router = APIRouter(tags=["products"])
 
@@ -56,12 +59,12 @@ class ProductOut(BaseModel):
 
     id: uuid.UUID
     url: str
-    title: str | None
-    image_url: str | None
-    category: str | None
-    platform: str | None
-    brand: str | None
-    current_price: float | None
+    title: Optional[str]
+    image_url: Optional[str]
+    category: Optional[str]
+    platform: Optional[str]
+    brand: Optional[str]
+    current_price: Optional[float]
     currency: str
     tags: list[TagOut]
     created_at: datetime
@@ -71,6 +74,7 @@ class ProductOut(BaseModel):
 class ProductCreate(BaseModel):
     url: str
     tags: list[str] = []
+    save_anyway: bool = False
 
     @field_validator("url")
     @classmethod
@@ -121,10 +125,11 @@ async def create_product(body: ProductCreate, db: DB):
     """Import a new product by URL. Scrapes title, price, and image automatically."""
     try:
         data = await scrape_product(body.url, db)
-    except SiteBlockedError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except CookiesExpiredError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    except (SiteBlockedError, CookiesExpiredError) as e:
+        if not body.save_anyway:
+            raise HTTPException(status_code=422, detail=str(e))
+        # "Save anyway" stores a minimal product row when scraping is blocked.
+        data = ProductData(url=body.url)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to scrape product: {e}")
 
@@ -174,8 +179,8 @@ _SORT_COLUMNS = {
 @router.get("/products", response_model=list[ProductOut])
 async def list_products(
     db: DB,
-    category: Annotated[str | None, Query()] = None,
-    tag: Annotated[str | None, Query()] = None,
+    category: Annotated[Optional[str], Query()] = None,
+    tag: Annotated[Optional[str], Query()] = None,
     sort_by: Annotated[str, Query()] = "date_added",
     sort_dir: Annotated[str, Query()] = "desc",
 ):
@@ -236,7 +241,7 @@ async def suggest_tags(product_id: uuid.UUID, db: DB):
 
 
 class ImageUpdate(BaseModel):
-    image_url: str | None
+    image_url: Optional[str]
 
 
 @router.patch("/products/{product_id}/image", response_model=ProductOut)
