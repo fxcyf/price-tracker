@@ -27,6 +27,11 @@ HEADERS = {
 PLAYWRIGHT_REQUIRED_DOMAINS = {
     "target.com",
     "bestbuy.com",
+    # httpx gets a 1MB JS bundle where all product/price data lives inside
+    # <script id="__NEXT_DATA__"> — preprocess_html strips all scripts, leaving
+    # the LLM with ~4KB of nav text and no price. Playwright renders the full
+    # React DOM so the price is visible as actual text.
+    "jcrew.com",
 }
 
 BLOCKED_SIGNALS = [
@@ -119,10 +124,14 @@ async def fetch_with_httpx(url: str) -> str | None:
 
 async def fetch_with_playwright(url: str) -> str:
     """Full browser fetch using a persistent Playwright context with stealth."""
+    import os
     from playwright.async_api import async_playwright
     from playwright_stealth import Stealth
 
-    BROWSER_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    # Each process gets its own profile dir to avoid lock contention between
+    # concurrent Celery ForkPoolWorkers sharing the same filesystem path.
+    profile_dir = BROWSER_PROFILE_DIR / str(os.getpid())
+    profile_dir.mkdir(parents=True, exist_ok=True)
     stealth = Stealth(
         navigator_user_agent_override=HEADERS["User-Agent"],
         navigator_platform_override="Linux x86_64",
@@ -130,7 +139,7 @@ async def fetch_with_playwright(url: str) -> str:
 
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
-            str(BROWSER_PROFILE_DIR),
+            str(profile_dir),
             headless=True,
             user_agent=HEADERS["User-Agent"],
             locale="en-US",

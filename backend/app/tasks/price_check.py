@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from celery import chord, group
 from sqlalchemy import select
 
-from app.core.database import AsyncSessionLocal, get_sync_db
+from app.core.database import CeleryAsyncSessionLocal, get_sync_db
 from app.models.price_history import PriceHistory
 from app.models.product import Product
 from app.models.settings import SETTINGS_ID, Settings
@@ -83,7 +83,7 @@ def check_product_price(self, product_id: str) -> dict:
             return {"status": "inactive"}
 
         settings = db.get(Settings, SETTINGS_ID)
-        old_price = product.current_price
+        old_price = float(product.current_price) if product.current_price is not None else None
 
     # --- Scrape (async → sync bridge) ---
     try:
@@ -195,6 +195,8 @@ def send_price_digest_task(results: list[dict]) -> dict:
 
 
 async def _scrape_price(url: str) -> float | None:
-    """Async helper: open a fresh async DB session and call scrape_price_only."""
-    async with AsyncSessionLocal() as db:
+    """Async helper: open a fresh async DB session and call scrape_price_only.
+    Uses CeleryAsyncSessionLocal (NullPool) to avoid inheriting pooled connections
+    across Celery's fork() boundary."""
+    async with CeleryAsyncSessionLocal() as db:
         return await scrape_price_only(url, db)

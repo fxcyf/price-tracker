@@ -4,12 +4,13 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-# Async engine — used by FastAPI routes
+# Async engine — used by FastAPI routes (pooled for efficiency)
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
@@ -18,6 +19,20 @@ engine = create_async_engine(
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+# Async engine for Celery tasks — NullPool avoids inheriting pooled connections
+# across fork() boundaries, which causes "Future attached to a different loop" errors.
+celery_async_engine = create_async_engine(
+    settings.database_url,
+    echo=settings.debug,
+    poolclass=NullPool,
+)
+
+CeleryAsyncSessionLocal = async_sessionmaker(
+    celery_async_engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )

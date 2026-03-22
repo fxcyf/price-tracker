@@ -46,9 +46,17 @@ async def get_watch_config(product_id: uuid.UUID, db: DB):
 async def trigger_price_check(product_id: uuid.UUID, db: DB):
     """Enqueue an immediate price check for a single product."""
     await _get_product_or_404(db, product_id)
-    from app.tasks.price_check import check_product_price
-    task = check_product_price.delay(str(product_id))
-    return {"status": "queued", "task_id": task.id}
+    from celery import chord
+    from app.tasks.price_check import check_product_price, send_price_digest_task
+    # Use the same chord pattern as the Beat schedule so the digest email is sent
+    # if a price alert is triggered. Without the chord, send_price_digest_task
+    # is never invoked and no email is sent.
+    job = chord(
+        [check_product_price.s(str(product_id))],
+        send_price_digest_task.s(),
+    )
+    result = job.delay()
+    return {"status": "queued", "task_id": result.id}
 
 
 @router.put("/products/{product_id}/watch", response_model=WatchConfigOut)

@@ -43,6 +43,46 @@ Provide multiple comma-separated fallback selectors per field in case the site u
 ),
 ```
 
+## Meta Tag Attribute Conventions — `name=` vs `property=` vs `itemprop=`
+
+Different meta tag standards use different HTML attributes. Getting this wrong silently drops data.
+
+| Standard | HTML attribute | Example |
+|---|---|---|
+| OpenGraph (all `og:*` and namespace extensions like `product:*`) | `property=` | `<meta property="product:price:amount" content="25.99">` |
+| Twitter Cards | `name=` | `<meta name="twitter:data1" content="$25.99">` |
+| Schema.org Microdata | `itemprop=` | `<meta itemprop="price" content="25.99">` |
+
+**Pitfall:** `product:price:amount` and `product:price:currency` look like they might use `name=` but they are part of the OpenGraph Commerce namespace and use `property=`. The `_meta_content()` helper must check all three attributes to be safe:
+
+```python
+def _meta_content(soup, name):
+    tag = (
+        soup.find("meta", attrs={"name": name})
+        or soup.find("meta", attrs={"property": name})   # OG-namespace extensions
+        or soup.find("meta", attrs={"itemprop": name})
+    )
+    return tag.get("content") if tag else None
+```
+
+## JSON-LD `AggregateOffer` vs `Offer`
+
+When a product JSON-LD uses `"@type": "AggregateOffer"` (common when a product has multiple variants/sellers), the price field semantics change:
+
+- `Offer`: has a single `price` field
+- `AggregateOffer`: has `lowPrice`, `highPrice`, and optionally `price` (which may equal `highPrice`)
+
+**Pitfall:** Reading `offer.get("price")` on an `AggregateOffer` returns the high/reference price. Always check `@type` and use `lowPrice` for aggregate offers:
+
+```python
+if offer.get("@type") == "AggregateOffer":
+    price_raw = offer.get("lowPrice") or offer.get("price")
+else:
+    price_raw = offer.get("price")
+```
+
+When `offers` is a list, prefer offers where `availability` contains `"InStock"` over others.
+
 ## OG Image Fallbacks
 
 Not all sites use `og:image`. Check these sources in order:
@@ -68,7 +108,9 @@ PLAYWRIGHT_REQUIRED_DOMAINS = {
 }
 ```
 
-Signal that a site needs this treatment: httpx returns title/image (from OG tags in `<head>`, which are SSR'd) but price is missing and the LLM snippet shows "Loading content" or similar placeholder text.
+Signal that a site needs this treatment: the scrape trace shows all fields sourced from LLM even though the browser's DevTools clearly shows correct OG/product meta tags in `<head>`. The giveaway is `data-rh="true"` on those meta tags — this attribute is added by **react-helmet**, meaning the tags are injected by React at runtime, not server-side. httpx gets the bare JS bundle shell (which passes `_looks_complete()` because it's >5000 chars and not blocked), but that shell has no meta tags yet.
+
+Another signal: httpx returns title/image (from OG tags in `<head>`, which are SSR'd) but price is missing and the LLM snippet shows "Loading content" or similar placeholder text.
 
 ## Relative Image URLs
 

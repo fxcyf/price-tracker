@@ -46,7 +46,7 @@ class Product(Base):
     category: Mapped[str | None] = mapped_column(String(100))
     platform: Mapped[str | None] = mapped_column(String(50))  # jd / taobao / amazon / generic
     brand: Mapped[str | None] = mapped_column(String(100))
-    current_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    current_price: Mapped[float | None] = mapped_column(Numeric(12, 2, asdecimal=False))
     currency: Mapped[str] = mapped_column(String(10), default="USD")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

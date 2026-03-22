@@ -70,8 +70,18 @@ def extract_opengraph(html: str, url: str) -> ProductData:
 
                     offers = item.get("offers") or item.get("Offers")
                     if offers:
-                        offer = offers[0] if isinstance(offers, list) else offers
-                        data.price = data.price or _parse_price(str(offer.get("price", "")))
+                        if isinstance(offers, list):
+                            # Prefer InStock offers; fall back to first
+                            instock = [o for o in offers if "InStock" in str(o.get("availability", ""))]
+                            offer = instock[0] if instock else offers[0]
+                        else:
+                            offer = offers
+                        # AggregateOffer uses lowPrice/highPrice, not a single price field
+                        if offer.get("@type") == "AggregateOffer":
+                            price_raw = offer.get("lowPrice") or offer.get("price")
+                        else:
+                            price_raw = offer.get("price")
+                        data.price = data.price or _parse_price(str(price_raw or ""))
                         data.currency = data.currency or str(offer.get("priceCurrency", "USD")).upper()
                     break
         except Exception:
@@ -120,7 +130,13 @@ def _extract_category(value) -> str | None:
 
 
 def _meta_content(soup: BeautifulSoup, name: str) -> str | None:
-    tag = soup.find("meta", attrs={"name": name}) or soup.find("meta", attrs={"itemprop": name})
+    # Check name=, property= (OG-namespace extensions like product:price:amount use property=),
+    # and itemprop= (schema.org microdata)
+    tag = (
+        soup.find("meta", attrs={"name": name})
+        or soup.find("meta", attrs={"property": name})
+        or soup.find("meta", attrs={"itemprop": name})
+    )
     return tag.get("content") if tag else None
 
 
