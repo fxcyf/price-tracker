@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Scraper test — four modes:
 

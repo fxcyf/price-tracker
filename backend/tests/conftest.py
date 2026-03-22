@@ -25,17 +25,32 @@ def pytest_addoption(parser):
         default=False,
         help="run live network scraper regression tests",
     )
+    parser.addoption(
+        "--live-curl-file",
+        action="store",
+        default="",
+        help="path to a curl command file used by live cookie regression tests",
+    )
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "live: marks tests that hit real websites")
     config.addinivalue_line("markers", "slow: marks tests that are slow to run")
+    config.addinivalue_line(
+        "markers",
+        "live_cookie: marks tests that validate cookie-backed live scraping",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--run-live"):
-        return
+    run_live = config.getoption("--run-live")
+    live_curl_file = config.getoption("--live-curl-file")
     skip_live = pytest.mark.skip(reason="need --run-live option to run")
+    skip_cookie_live = pytest.mark.skip(
+        reason="need --live-curl-file to run cookie live regression tests",
+    )
     for item in items:
-        if "live" in item.keywords:
+        if "live" in item.keywords and not run_live:
             item.add_marker(skip_live)
+        if "live_cookie" in item.keywords and not live_curl_file:
+            item.add_marker(skip_cookie_live)
