@@ -72,3 +72,14 @@ Add a domain to `PLAYWRIGHT_REQUIRED_DOMAINS` only if:
 3. extracted product price is still missing.
 
 This avoids forcing Playwright for domains where lightweight httpx still works.
+
+## URL graduation rule (badcase -> goodcase)
+
+Before moving a URL from `badcase` to `goodcase`, run at least two live checks in the current network environment.
+
+- Graduate only if it is `parsed` in all checks (stable complete extraction).
+- Keep in `badcase` if results flap between `parsed` and `parse-failed`.
+- Keep anti-bot failures (`blocked`, `needs-cookies`) in `badcase` even if content occasionally appears.
+- If a URL only passes with imported cookies, treat it as `needs-cookies` and keep it in `badcase`.
+
+Reason: one-off successes are common with bot defenses and should not pollute `goodcase`.
