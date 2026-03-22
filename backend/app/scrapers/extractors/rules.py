@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Layer 2a: Platform-specific CSS selector rules for well-known e-commerce sites."""
 
 import logging
@@ -137,6 +139,24 @@ PLATFORM_RULES: dict[str, PlatformRule] = {
         image_selector="[class*='pdp-photo-single-column-image'] img, [class*='pdp__image-gallery'] img",
         currency="USD",
     ),
+    "jcrew.com": PlatformRule(
+        platform="jcrew",
+        price_selector=(
+            "[data-testid='product-price'], "
+            "[class*='product-price'], "
+            "[itemprop='price']"
+        ),
+        title_selector=(
+            "h1[data-testid='product-name'], "
+            "h1[class*='product-name'], "
+            "h1[itemprop='name']"
+        ),
+        image_selector=(
+            "[data-testid='product-image'] img, "
+            "[class*='product-image'] img"
+        ),
+        currency="USD",
+    ),
 }
 
 
@@ -153,7 +173,10 @@ def _detect_platform(url: str) -> str | None:
 def _parse_price(text: str | None) -> float | None:
     if not text:
         return None
-    cleaned = re.sub(r"[^\d.]", "", text.strip())
+    match = re.search(r"(?<!\d)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", text.strip())
+    if not match:
+        return None
+    cleaned = match.group(0).replace(",", "")
     try:
         return float(cleaned)
     except ValueError:

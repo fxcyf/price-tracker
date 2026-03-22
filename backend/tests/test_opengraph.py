@@ -287,7 +287,7 @@ class TestPriceParsing:
     @pytest.mark.parametrize("raw,expected", [
         ("29.99", 29.99),
         ("$29.99", 29.99),
-        ("1,299.00", 129900.0),   # commas stripped → becomes 129900.0
+        ("1,299.00", 1299.0),
         ("  49.00  ", 49.0),
         ("0.99", 0.99),
     ])

@@ -2,7 +2,11 @@
 Tests for app.scrapers.fetcher.preprocess_html.
 """
 
-from app.scrapers.fetcher import preprocess_html
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from app.scrapers.fetcher import _is_blocked, _looks_complete, fetch_page, preprocess_html
 
 
 class TestPreprocessHtml:
@@ -66,3 +70,83 @@ class TestPreprocessHtml:
         result = preprocess_html(html)
         assert "128.00" not in result, "__NEXT_DATA__ prices are stripped; use meta tags or CSS selectors"
         assert "Jackie Cardigan" not in result
+
+
+class TestBlockedAndCompleteSignals:
+    @pytest.mark.parametrize("html", [
+        "<html>Robot Check</html>",
+        "<html>Access denied</html>",
+        "<html>Please enable JavaScript and cookies</html>",
+        "<html><div id='px-captcha'></div></html>",
+    ])
+    def test_is_blocked_true(self, html):
+        assert _is_blocked(html) is True
+
+    @pytest.mark.parametrize("html", [
+        "<html><body><p>normal product content</p></body></html>",
+        "<html><body><h1>shirt</h1><span>$29.99</span></body></html>",
+    ])
+    def test_is_blocked_false(self, html):
+        assert _is_blocked(html) is False
+
+    def test_looks_complete_requires_minimum_size(self):
+        assert _looks_complete("x" * 3000) is False
+        assert _looks_complete("x" * 5000) is True
+
+    def test_looks_complete_rejects_blocked_page(self):
+        html = ("x" * 6000) + " Robot Check "
+        assert _looks_complete(html) is False
+
+
+class TestFetchPageRouting:
+    @pytest.mark.asyncio
+    async def test_uses_stored_cookies_first(self):
+        with (
+            patch("app.scrapers.fetcher.fetch_with_stored_cookies", new=AsyncMock(return_value="cookie-html")) as mock_cookies,
+            patch("app.scrapers.fetcher.fetch_with_httpx", new=AsyncMock(return_value="httpx-html")) as mock_httpx,
+            patch("app.scrapers.fetcher.fetch_with_playwright", new=AsyncMock(return_value="pw-html")) as mock_pw,
+        ):
+            result = await fetch_page("https://shop.example.com/p/1", stored_cookies={"sid": "abc"})
+
+        assert result == "cookie-html"
+        mock_cookies.assert_awaited_once()
+        mock_httpx.assert_not_awaited()
+        mock_pw.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_httpx_when_cookie_fetch_empty(self):
+        with (
+            patch("app.scrapers.fetcher.fetch_with_stored_cookies", new=AsyncMock(return_value=None)) as mock_cookies,
+            patch("app.scrapers.fetcher.fetch_with_httpx", new=AsyncMock(return_value="httpx-html")) as mock_httpx,
+            patch("app.scrapers.fetcher.fetch_with_playwright", new=AsyncMock(return_value="pw-html")) as mock_pw,
+        ):
+            result = await fetch_page("https://shop.example.com/p/1", stored_cookies={"sid": "abc"})
+
+        assert result == "httpx-html"
+        mock_cookies.assert_awaited_once()
+        mock_httpx.assert_awaited_once()
+        mock_pw.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_playwright_when_httpx_empty(self):
+        with (
+            patch("app.scrapers.fetcher.fetch_with_httpx", new=AsyncMock(return_value=None)) as mock_httpx,
+            patch("app.scrapers.fetcher.fetch_with_playwright", new=AsyncMock(return_value="pw-html")) as mock_pw,
+        ):
+            result = await fetch_page("https://shop.example.com/p/1")
+
+        assert result == "pw-html"
+        mock_httpx.assert_awaited_once()
+        mock_pw.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_httpx_for_playwright_required_domain(self):
+        with (
+            patch("app.scrapers.fetcher.fetch_with_httpx", new=AsyncMock(return_value="httpx-html")) as mock_httpx,
+            patch("app.scrapers.fetcher.fetch_with_playwright", new=AsyncMock(return_value="pw-html")) as mock_pw,
+        ):
+            result = await fetch_page("https://www.target.com/p/123")
+
+        assert result == "pw-html"
+        mock_httpx.assert_not_awaited()
+        mock_pw.assert_awaited_once()

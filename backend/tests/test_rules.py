@@ -44,10 +44,11 @@ class TestParsePrice:
         ("$49.99", 49.99),
         ("49.99", 49.99),
         ("  $128.00  ", 128.0),
+        ("1,299.00", 1299.0),
         (None, None),
         ("", None),
         ("Free", None),
-        ("USD 29.99", 2999.0),  # strips non-digits except dot → "2999"
+        ("USD 29.99", 29.99),
     ])
     def test_parse(self, text, expected):
         assert _parse_price(text) == expected
@@ -106,7 +107,7 @@ class TestLearnedRule:
     def test_learned_price_selector(self):
         html = make_html(body='<span class="sale-price">$149.00</span>')
         result = extract_by_learned_rule(
-            html, URL="https://example.com/p/1",
+            html, url="https://example.com/p/1",
             price_selector=".sale-price",
             title_selector=None,
             image_selector=None,
@@ -116,7 +117,7 @@ class TestLearnedRule:
     def test_learned_title_selector(self):
         html = make_html(body='<h1 class="product-name">Blue Sneakers</h1>')
         result = extract_by_learned_rule(
-            html, URL="https://example.com/p/1",
+            html, url="https://example.com/p/1",
             price_selector=None,
             title_selector="h1.product-name",
             image_selector=None,
@@ -126,7 +127,7 @@ class TestLearnedRule:
     def test_learned_image_selector(self):
         html = make_html(body='<img class="main-img" src="https://cdn.example.com/shoe.jpg" />')
         result = extract_by_learned_rule(
-            html, URL="https://example.com/p/1",
+            html, url="https://example.com/p/1",
             price_selector=None,
             title_selector=None,
             image_selector="img.main-img",
@@ -136,7 +137,7 @@ class TestLearnedRule:
     def test_bad_selector_returns_none_gracefully(self):
         html = make_html(body='<div>nothing here</div>')
         result = extract_by_learned_rule(
-            html, URL="https://example.com/p/1",
+            html, url="https://example.com/p/1",
             price_selector="#nonexistent-element",
             title_selector=None,
             image_selector=None,
@@ -146,7 +147,7 @@ class TestLearnedRule:
     def test_no_og_fixture_with_correct_learned_selectors(self):
         html = load_fixture("no_og_product.html")
         result = extract_by_learned_rule(
-            html, URL="https://www.unknownstore.com/products/x900",
+            html, url="https://www.unknownstore.com/products/x900",
             price_selector=".sale-price",
             title_selector="h1.product-name",
             image_selector="img.product-image",

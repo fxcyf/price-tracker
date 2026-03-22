@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     # Default check interval for Beat schedule (can be overridden in .env)
     check_interval_hours: int = 24
 
+    # Scraper fetch reliability
+    fetch_http_timeout_seconds: int = 15
+    fetch_playwright_origin_timeout_ms: int = 20000
+    fetch_playwright_nav_timeout_ms: int = 30000
+    fetch_playwright_settle_timeout_ms: int = 4000
+    fetch_retry_attempts: int = 2
+    fetch_retry_backoff_seconds: float = 1.0
+
 
 @lru_cache
 def get_settings() -> Settings:

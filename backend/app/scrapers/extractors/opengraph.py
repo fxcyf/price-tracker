@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Layer 1: Extract product data from OpenGraph meta tags and JSON-LD structured data."""
 
 import json
@@ -14,8 +16,10 @@ logger = logging.getLogger(__name__)
 def _parse_price(raw: str | None) -> float | None:
     if not raw:
         return None
-    # Remove currency symbols, commas, spaces
-    cleaned = re.sub(r"[^\d.]", "", str(raw).strip())
+    match = re.search(r"(?<!\d)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", str(raw).strip())
+    if not match:
+        return None
+    cleaned = match.group(0).replace(",", "")
     try:
         return float(cleaned)
     except ValueError:

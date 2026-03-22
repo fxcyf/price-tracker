@@ -1,13 +1,24 @@
+from __future__ import annotations
+
+import asyncio
 import logging
 from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 BROWSER_PROFILE_DIR = Path.home() / ".price-tracker-browser-profile"
+FETCH_HTTP_TIMEOUT_SECONDS = settings.fetch_http_timeout_seconds
+FETCH_PLAYWRIGHT_ORIGIN_TIMEOUT_MS = settings.fetch_playwright_origin_timeout_ms
+FETCH_PLAYWRIGHT_NAV_TIMEOUT_MS = settings.fetch_playwright_nav_timeout_ms
+FETCH_PLAYWRIGHT_SETTLE_TIMEOUT_MS = settings.fetch_playwright_settle_timeout_ms
+FETCH_RETRY_ATTEMPTS = settings.fetch_retry_attempts
+FETCH_RETRY_BACKOFF_SECONDS = settings.fetch_retry_backoff_seconds
 
 HEADERS = {
     "User-Agent": (
@@ -74,6 +85,23 @@ def _looks_complete(html: str) -> bool:
     return not _is_blocked(html) and len(html) >= 5000
 
 
+def _is_retryable_httpx_exception(exc: Exception) -> bool:
+    if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+        return 500 <= exc.response.status_code < 600
+    return False
+
+
+def _should_retry(attempt: int) -> bool:
+    return attempt < FETCH_RETRY_ATTEMPTS
+
+
+async def _sleep_retry_delay(attempt: int) -> None:
+    delay = FETCH_RETRY_BACKOFF_SECONDS * (2 ** attempt)
+    await asyncio.sleep(delay)
+
+
 async def fetch_with_stored_cookies(url: str, cookies: dict) -> str | None:
     """
     Attempt a fast httpx fetch using user-imported cookies (e.g. from a real browser).
@@ -81,45 +109,73 @@ async def fetch_with_stored_cookies(url: str, cookies: dict) -> str | None:
     Raises CookiesExpiredError when the response signals the cookies are no longer valid.
     """
     domain = (urlparse(url).hostname or "").removeprefix("www.")
-    try:
-        async with httpx.AsyncClient(
-            cookies=cookies,
-            headers=HEADERS,
-            follow_redirects=True,
-            timeout=15,
-        ) as client:
-            response = await client.get(url)
-            html = response.text
+    for attempt in range(FETCH_RETRY_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(
+                cookies=cookies,
+                headers=HEADERS,
+                follow_redirects=True,
+                timeout=FETCH_HTTP_TIMEOUT_SECONDS,
+            ) as client:
+                response = await client.get(url)
+                html = response.text
 
-            if response.status_code in (403, 401) or _is_blocked(html):
-                raise CookiesExpiredError(domain)
+                if response.status_code in (403, 401) or _is_blocked(html):
+                    raise CookiesExpiredError(domain)
 
-            if _looks_complete(html):
-                logger.debug("fetch_with_stored_cookies succeeded for %s", url)
-                return html
+                if _looks_complete(html):
+                    logger.debug("fetch_with_stored_cookies succeeded for %s", url)
+                    return html
 
+                return None
+        except CookiesExpiredError:
+            raise
+        except Exception as exc:
+            retryable = _is_retryable_httpx_exception(exc)
+            logger.debug(
+                "fetch_with_stored_cookies failed for %s (attempt %s/%s): %s",
+                url,
+                attempt + 1,
+                FETCH_RETRY_ATTEMPTS + 1,
+                exc,
+            )
+            if retryable and _should_retry(attempt):
+                await _sleep_retry_delay(attempt)
+                continue
             return None
-    except CookiesExpiredError:
-        raise
-    except Exception as exc:
-        logger.debug("fetch_with_stored_cookies failed for %s: %s", url, exc)
-        return None
+    return None
 
 
 async def fetch_with_httpx(url: str) -> str | None:
     """Fast anonymous fetch using httpx."""
-    try:
-        async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            html = response.text
-            if _looks_complete(html):
-                return html
-            logger.debug("httpx fetch incomplete for %s, will try Playwright", url)
+    for attempt in range(FETCH_RETRY_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(
+                headers=HEADERS,
+                follow_redirects=True,
+                timeout=FETCH_HTTP_TIMEOUT_SECONDS,
+            ) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                html = response.text
+                if _looks_complete(html):
+                    return html
+                logger.debug("httpx fetch incomplete for %s, will try Playwright", url)
+                return None
+        except Exception as exc:
+            retryable = _is_retryable_httpx_exception(exc)
+            logger.debug(
+                "httpx fetch failed for %s (attempt %s/%s): %s",
+                url,
+                attempt + 1,
+                FETCH_RETRY_ATTEMPTS + 1,
+                exc,
+            )
+            if retryable and _should_retry(attempt):
+                await _sleep_retry_delay(attempt)
+                continue
             return None
-    except Exception as exc:
-        logger.debug("httpx fetch failed for %s: %s", url, exc)
-        return None
+    return None
 
 
 async def fetch_with_playwright(url: str) -> str:
@@ -137,42 +193,59 @@ async def fetch_with_playwright(url: str) -> str:
         navigator_platform_override="Linux x86_64",
     )
 
-    async with async_playwright() as p:
-        context = await p.chromium.launch_persistent_context(
-            str(profile_dir),
-            headless=True,
-            user_agent=HEADERS["User-Agent"],
-            locale="en-US",
-            viewport={"width": 1280, "height": 800},
-            extra_http_headers={
-                "sec-ch-ua": HEADERS["sec-ch-ua"],
-                "sec-ch-ua-mobile": HEADERS["sec-ch-ua-mobile"],
-                "sec-ch-ua-platform": HEADERS["sec-ch-ua-platform"],
-                "dnt": "1",
-            },
-            args=["--disable-blink-features=AutomationControlled"],
-        )
-        await stealth.apply_stealth_async(context)
-        page = await context.new_page()
+    for attempt in range(FETCH_RETRY_ATTEMPTS + 1):
         try:
-            origin = f"{urlparse(url).scheme}://{urlparse(url).hostname}"
-            try:
-                await page.goto(origin, wait_until="domcontentloaded", timeout=20000)
-                await page.wait_for_timeout(2500)
-            except Exception:
-                pass
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(4000)
-            html = await page.content()
-        finally:
-            await context.close()
+            async with async_playwright() as p:
+                context = await p.chromium.launch_persistent_context(
+                    str(profile_dir),
+                    headless=True,
+                    user_agent=HEADERS["User-Agent"],
+                    locale="en-US",
+                    viewport={"width": 1280, "height": 800},
+                    extra_http_headers={
+                        "sec-ch-ua": HEADERS["sec-ch-ua"],
+                        "sec-ch-ua-mobile": HEADERS["sec-ch-ua-mobile"],
+                        "sec-ch-ua-platform": HEADERS["sec-ch-ua-platform"],
+                        "dnt": "1",
+                    },
+                    args=["--disable-blink-features=AutomationControlled"],
+                )
+                await stealth.apply_stealth_async(context)
+                page = await context.new_page()
+                try:
+                    origin = f"{urlparse(url).scheme}://{urlparse(url).hostname}"
+                    try:
+                        await page.goto(origin, wait_until="domcontentloaded", timeout=FETCH_PLAYWRIGHT_ORIGIN_TIMEOUT_MS)
+                        await page.wait_for_timeout(min(2500, FETCH_PLAYWRIGHT_SETTLE_TIMEOUT_MS))
+                    except Exception:
+                        pass
+                    await page.goto(url, wait_until="domcontentloaded", timeout=FETCH_PLAYWRIGHT_NAV_TIMEOUT_MS)
+                    await page.wait_for_timeout(FETCH_PLAYWRIGHT_SETTLE_TIMEOUT_MS)
+                    html = await page.content()
+                finally:
+                    await context.close()
 
-    if _is_blocked(html):
-        raise SiteBlockedError(
-            f"Site blocked automated access for URL: {url}. "
-            "Import cookies from your browser to enable tracking for this site."
-        )
-    return html
+            if _is_blocked(html):
+                raise SiteBlockedError(
+                    f"Site blocked automated access for URL: {url}. "
+                    "Import cookies from your browser to enable tracking for this site."
+                )
+            return html
+        except SiteBlockedError:
+            raise
+        except Exception as exc:
+            logger.debug(
+                "Playwright fetch failed for %s (attempt %s/%s): %s",
+                url,
+                attempt + 1,
+                FETCH_RETRY_ATTEMPTS + 1,
+                exc,
+            )
+            if _should_retry(attempt):
+                await _sleep_retry_delay(attempt)
+                continue
+            raise
+    raise RuntimeError(f"Playwright fetch failed after retries for {url}")
 
 
 async def fetch_page(url: str, stored_cookies: dict | None = None) -> str:
