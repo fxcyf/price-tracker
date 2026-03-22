@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Scraper dispatcher — orchestrates the layered extraction pipeline.
 
@@ -24,33 +26,58 @@ from app.scrapers.schemas import FieldTrace, ProductData, ScrapeDebug
 logger = logging.getLogger(__name__)
 
 
-def _get_domain(url: str) -> str:
-    hostname = urlparse(url).hostname or ""
+def normalize_domain(domain_or_url: str) -> str:
+    """Normalize host/domain keys used by domain_rules (lowercase, no www)."""
+    raw = (domain_or_url or "").strip().lower()
+    if "://" in raw:
+        hostname = urlparse(raw).hostname or ""
+    else:
+        hostname = raw.split("/", 1)[0]
     return hostname.removeprefix("www.")
 
 
+def _get_domain(url: str) -> str:
+    return normalize_domain(url)
+
+
 async def _get_learned_rule(db: AsyncSession, domain: str) -> DomainRule | None:
-    result = await db.execute(select(DomainRule).where(DomainRule.domain == domain))
-    return result.scalar_one_or_none()
+    normalized = normalize_domain(domain)
+    result = await db.execute(
+        select(DomainRule).where(
+            DomainRule.domain.in_([normalized, f"www.{normalized}"])
+        )
+    )
+    rules = result.scalars().all()
+    if not rules:
+        return None
+    # Prefer canonical key if both rows exist.
+    for rule in rules:
+        if rule.domain == normalized:
+            return rule
+    return rules[0]
 
 
 async def save_domain_cookies(db: AsyncSession, domain: str, cookies: dict) -> DomainRule:
     """Store user-imported cookies for a domain. Called from the API cookie-import endpoint."""
-    rule = await _get_learned_rule(db, domain)
+    normalized = normalize_domain(domain)
+    rule = await _get_learned_rule(db, normalized)
     if rule:
+        # Migrate legacy "www.*" keys to canonical domain.
+        if rule.domain != normalized:
+            rule.domain = normalized
         rule.cookies = cookies
         rule.cookies_status = CookieStatus.VALID
         rule.cookies_updated_at = datetime.now(timezone.utc)
     else:
         rule = DomainRule(
-            domain=domain,
+            domain=normalized,
             cookies=cookies,
             cookies_status=CookieStatus.VALID,
             cookies_updated_at=datetime.now(timezone.utc),
         )
         db.add(rule)
     await db.commit()
-    logger.info("Saved cookies for domain: %s (%d cookies)", domain, len(cookies))
+    logger.info("Saved cookies for domain: %s (%d cookies)", normalized, len(cookies))
     return rule
 
 
