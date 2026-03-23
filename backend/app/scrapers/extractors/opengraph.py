@@ -78,8 +78,13 @@ def extract_opengraph(html: str, url: str) -> ProductData:
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             payload = json.loads(script.string or "")
-            # Could be a list or single object
-            items = payload if isinstance(payload, list) else [payload]
+            # Could be a list, a bare object, or a {"@graph": [...]} wrapper
+            if isinstance(payload, list):
+                items = payload
+            elif isinstance(payload, dict) and "@graph" in payload:
+                items = payload["@graph"]
+            else:
+                items = [payload]
             for item in items:
                 item_type = item.get("@type")
 
@@ -124,6 +129,14 @@ def extract_opengraph(html: str, url: str) -> ProductData:
         if avail_raw:
             data.in_stock = _parse_availability(avail_raw)
 
+    # Microdata itemprop="availability" on non-<meta> elements (e.g. Maison Kitsune)
+    if data.in_stock is None:
+        avail_tag = soup.find(attrs={"itemprop": "availability"})
+        if avail_tag:
+            avail_raw = avail_tag.get("content") or avail_tag.get("href")
+            if avail_raw:
+                data.in_stock = _parse_availability(str(avail_raw))
+
     # Last-resort: itemprop="image" anywhere in the body
     if not data.image_url:
         img_tag = soup.find(attrs={"itemprop": "image"})
@@ -135,7 +148,10 @@ def extract_opengraph(html: str, url: str) -> ProductData:
         brand_tag = soup.find(attrs={"itemprop": "brand"})
         if brand_tag:
             name_tag = brand_tag.find(attrs={"itemprop": "name"})
-            data.brand = (name_tag.get_text(strip=True) if name_tag else brand_tag.get_text(strip=True)) or None
+            if name_tag:
+                data.brand = name_tag.get("content") or name_tag.get_text(strip=True) or None
+            else:
+                data.brand = brand_tag.get("content") or brand_tag.get_text(strip=True) or None
 
     return data
 
