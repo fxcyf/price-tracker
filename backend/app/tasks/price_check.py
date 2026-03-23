@@ -86,10 +86,12 @@ def check_product_price(self, product_id: str) -> dict:
 
         settings = db.get(Settings, SETTINGS_ID)
         old_price = float(product.current_price) if product.current_price is not None else None
+        old_in_stock = product.in_stock
+        notify_on_restock = watch.notify_on_restock if watch else False
 
     # --- Scrape (async → sync bridge) ---
     try:
-        new_price = asyncio.run(_scrape_price(product.url))
+        new_price, new_in_stock = asyncio.run(_scrape_price(product.url))
     except CookiesExpiredError as exc:
         logger.warning("Cookies expired for %s: %s", product.url, exc)
         return {"status": "cookies_expired", "url": product.url}
@@ -100,7 +102,35 @@ def check_product_price(self, product_id: str) -> dict:
         except self.MaxRetriesExceededError:
             return {"status": "failed", "error": str(exc)}
 
+    # --- Restock detection (computed before early returns) ---
+    restock_alert = (
+        old_in_stock is False
+        and new_in_stock is True
+        and notify_on_restock
+    )
+
     if new_price is None:
+        # Persist stock status change even when price is unavailable
+        if new_in_stock is not None:
+            with get_sync_db() as db:
+                p = db.get(Product, pid)
+                p.in_stock = new_in_stock
+                w = db.execute(
+                    select(WatchConfig).where(WatchConfig.product_id == pid)
+                ).scalar_one_or_none()
+                if w:
+                    w.last_checked_at = datetime.now(timezone.utc)
+        if restock_alert:
+            logger.info("Restock detected for %s (no price)", product.title)
+            return {
+                "status": "no_price",
+                "alert": True,
+                "title": product.title,
+                "url": product.url,
+                "image_url": product.image_url,
+                "currency": product.currency,
+                "direction": "restocked",
+            }
         logger.warning("No price extracted for %s", product.url)
         return {"status": "no_price"}
 
@@ -118,6 +148,8 @@ def check_product_price(self, product_id: str) -> dict:
         ))
 
         product.current_price = new_price
+        if new_in_stock is not None:
+            product.in_stock = new_in_stock
         watch.last_checked_at = datetime.now(timezone.utc)
 
     # --- Price change detection ---
@@ -145,6 +177,11 @@ def check_product_price(self, product_id: str) -> dict:
         logger.info(
             "Price rose for %s: %.2f → %.2f", product.title, old_price, new_price
         )
+
+    if restock_alert:
+        alert_triggered = True
+        direction = "restocked"
+        logger.info("Restock detected for %s", product.title)
 
     result: dict = {
         "status": "ok",
@@ -196,7 +233,7 @@ def send_price_digest_task(results: list[dict]) -> dict:
         return {"emails_sent": 0, "error": str(exc)}
 
 
-async def _scrape_price(url: str) -> float | None:
+async def _scrape_price(url: str) -> tuple[float | None, bool | None]:
     """Async helper: open a fresh async DB session and call scrape_price_only.
     Uses CeleryAsyncSessionLocal (NullPool) to avoid inheriting pooled connections
     across Celery's fork() boundary."""

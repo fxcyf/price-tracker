@@ -86,12 +86,15 @@ def send_price_digest(to: str, alerts: list[dict]) -> None:
     """
     n_dropped = sum(1 for a in alerts if a.get("direction") == "dropped")
     n_risen = sum(1 for a in alerts if a.get("direction") == "increased")
+    n_restock = sum(1 for a in alerts if a.get("direction") == "restocked")
 
     parts = []
     if n_dropped:
         parts.append(f"{n_dropped} dropped")
     if n_risen:
         parts.append(f"{n_risen} rose")
+    if n_restock:
+        parts.append(f"{n_restock} back in stock")
     subject = f"Price Tracker: {', '.join(parts)} ({len(alerts)} product{'s' if len(alerts) > 1 else ''})"
 
     template = _jinja_env.get_template("price_digest.html")
