@@ -117,7 +117,7 @@ async def _mark_cookies_expired(db: AsyncSession, domain: str) -> None:
 
 
 # Fields tracked in the scrape trace (in display order)
-_TRACED_FIELDS = ("title", "price", "image_url", "brand", "category", "platform")
+_TRACED_FIELDS = ("title", "price", "image_url", "brand", "category", "platform", "in_stock")
 
 
 def _track_fields(
@@ -265,10 +265,11 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> tuple[P
     return result, _build_debug(result, layers_run, accumulator)
 
 
-async def scrape_price_only(url: str, db: AsyncSession) -> float | None:
+async def scrape_price_only(url: str, db: AsyncSession) -> tuple[float | None, bool | None]:
     """
     Lightweight price-only scrape used by the periodic price-check task.
     Tries learned/built-in selectors first; falls back to full scrape only if needed.
+    Returns (price, in_stock).
     """
     domain = _get_domain(url)
     learned_rule = await _get_learned_rule(db, domain)
@@ -276,7 +277,7 @@ async def scrape_price_only(url: str, db: AsyncSession) -> float | None:
     # Skip if cookies are known expired — caller should handle notification
     if learned_rule and learned_rule.cookies_status == CookieStatus.EXPIRED:
         logger.info("Skipping price check for %s — cookies expired", domain)
-        return None
+        return None, None
 
     stored_cookies = (
         learned_rule.cookies
@@ -298,16 +299,18 @@ async def scrape_price_only(url: str, db: AsyncSession) -> float | None:
                 logger.debug("Price-only scrape via learned rule succeeded: %s → %s", url, price)
                 learned_rule.success_count += 1
                 await db.commit()
-                return price
+                # Reuse the already-fetched HTML to extract availability (no extra network call)
+                in_stock = extract_opengraph(html, url).in_stock
+                return price, in_stock
             logger.warning("Learned price selector failed for %s, triggering re-learning", url)
             learned_rule.price_selector = None
             await db.commit()
         except CookiesExpiredError:
             await _mark_cookies_expired(db, domain)
-            return None
+            return None, None
         except Exception as exc:
             logger.warning("Price-only scrape error for %s: %s", url, exc)
 
     # Full scrape (re-learns selectors if LLM is needed)
     data = await scrape_product(url, db)
-    return data.price
+    return data.price, data.in_stock

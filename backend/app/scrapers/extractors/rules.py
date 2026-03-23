@@ -142,6 +142,9 @@ PLATFORM_RULES: dict[str, PlatformRule] = {
     "jcrew.com": PlatformRule(
         platform="jcrew",
         price_selector=(
+            # Target the sale-price span directly to avoid mixing in the
+            # strikethrough original price that lives in a sibling div.
+            "[class*='product__price--sale'] > span, "
             "[data-testid='product-price'], "
             "[class*='product-price'], "
             "[itemprop='price']"
@@ -222,12 +225,24 @@ def _detect_platform(url: str) -> str | None:
 def _parse_price(text: str | None) -> float | None:
     if not text:
         return None
+    # Prefer the first currency-anchored number.  This avoids false matches on
+    # discount percentages ("Save 40%: $59.99" → 59.99, not 40) and on plain
+    # bare numbers that happen to appear before the actual price in the text.
+    currency_match = re.search(
+        r"[$€£¥₩]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)",
+        text.strip(),
+    )
+    if currency_match:
+        try:
+            return float(currency_match.group(1).replace(",", ""))
+        except ValueError:
+            pass
+    # Fallback: first standalone number (e.g. bare "25.99" from a meta tag).
     match = re.search(r"(?<!\d)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", text.strip())
     if not match:
         return None
-    cleaned = match.group(0).replace(",", "")
     try:
-        return float(cleaned)
+        return float(match.group(0).replace(",", ""))
     except ValueError:
         return None
 

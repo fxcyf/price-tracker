@@ -5,12 +5,27 @@ from __future__ import annotations
 import json
 import logging
 import re
+from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 
 from app.scrapers.schemas import ProductData
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_availability(raw: str) -> bool | None:
+    """Normalize schema.org / OG availability strings to True/False/None."""
+    if not raw:
+        return None
+    normalized = raw.strip().lower().replace(" ", "").replace("-", "")
+    # Handle full URIs like https://schema.org/InStock → "instock"
+    normalized = normalized.split("/")[-1]
+    if normalized in {"instock", "preorder", "presale", "onlineonly", "limitedavailability"}:
+        return True
+    if normalized in {"outofstock", "discontinued", "soldout", "unavailable"}:
+        return False
+    return None
 
 
 def _parse_price(raw: str | None) -> float | None:
@@ -66,7 +81,17 @@ def extract_opengraph(html: str, url: str) -> ProductData:
             # Could be a list or single object
             items = payload if isinstance(payload, list) else [payload]
             for item in items:
-                if item.get("@type") in ("Product", "IndividualProduct"):
+                item_type = item.get("@type")
+
+                # Shopify / some platforms wrap variants in a ProductGroup
+                if item_type == "ProductGroup":
+                    product_item = _resolve_product_group_variant(item, url)
+                    if product_item is None:
+                        continue
+                    item = product_item
+                    item_type = item.get("@type")
+
+                if item_type in ("Product", "IndividualProduct"):
                     data.title = data.title or item.get("name")
                     data.image_url = data.image_url or _first(item.get("image"))
                     data.category = data.category or _extract_category(item.get("category"))
@@ -87,9 +112,17 @@ def extract_opengraph(html: str, url: str) -> ProductData:
                             price_raw = offer.get("price")
                         data.price = data.price or _parse_price(str(price_raw or ""))
                         data.currency = data.currency or str(offer.get("priceCurrency", "USD")).upper()
+                        if data.in_stock is None:
+                            data.in_stock = _parse_availability(str(offer.get("availability", "")))
                     break
         except Exception:
             continue
+
+    # OG product:availability meta tag
+    if data.in_stock is None:
+        avail_raw = _meta_content(soup, "product:availability")
+        if avail_raw:
+            data.in_stock = _parse_availability(avail_raw)
 
     # Last-resort: itemprop="image" anywhere in the body
     if not data.image_url:
@@ -105,6 +138,65 @@ def extract_opengraph(html: str, url: str) -> ProductData:
             data.brand = (name_tag.get_text(strip=True) if name_tag else brand_tag.get_text(strip=True)) or None
 
     return data
+
+
+def _resolve_product_group_variant(group: dict, url: str) -> dict | None:
+    """
+    Resolve the best Product variant from a schema.org/ProductGroup.
+
+    Shopify and similar platforms use ProductGroup with hasVariant[] where each
+    entry is a full Product with its own offers/availability.
+
+    Resolution order:
+    1. Variant whose offer URL or @id matches the `variant=` query param in the URL
+    2. First in-stock variant (availability contains "InStock")
+    3. First variant in the list (regardless of stock status)
+
+    Fields missing from the variant (e.g. category, brand) are patched in from
+    the group so the caller can treat the returned item as a normal Product.
+    """
+    variants = group.get("hasVariant") or []
+    if not variants or not isinstance(variants, list):
+        return None
+
+    # Extract variant query param from URL (e.g. ?variant=43455812304982)
+    variant_id = None
+    qs = parse_qs(urlparse(url).query)
+    if "variant" in qs:
+        variant_id = qs["variant"][0]
+
+    chosen = None
+
+    # 1. Match by variant ID in @id or offers.url
+    if variant_id:
+        for v in variants:
+            v_id = str(v.get("@id", ""))
+            offer = v.get("offers") or {}
+            offer_url = str(offer.get("url", "")) if isinstance(offer, dict) else ""
+            if variant_id in v_id or variant_id in offer_url:
+                chosen = v
+                break
+
+    # 2. First in-stock variant
+    if chosen is None:
+        for v in variants:
+            offer = v.get("offers") or {}
+            if isinstance(offer, dict) and "InStock" in str(offer.get("availability", "")):
+                chosen = v
+                break
+
+    # 3. First variant
+    if chosen is None:
+        chosen = variants[0]
+
+    # Patch group-level fields onto the variant so the caller gets a complete item
+    result = dict(chosen)
+    result.setdefault("@type", "Product")
+    for field in ("category", "brand"):
+        if field not in result and field in group:
+            result[field] = group[field]
+
+    return result
 
 
 def _extract_brand(value) -> str | None:

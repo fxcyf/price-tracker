@@ -30,6 +30,7 @@ class ProductData:
     category: str | None = None
     brand: str | None = None
     platform: str = "generic"
+    in_stock: bool | None = None
 
     # CSS selectors returned by LLM (used to populate domain_rules)
     learned_price_selector: str | None = None
@@ -54,6 +55,7 @@ class ProductData:
             category=self.category or other.category,
             brand=self.brand or other.brand,
             platform=self.platform if self.platform != "generic" else other.platform,
+            in_stock=self.in_stock if self.in_stock is not None else other.in_stock,
             learned_price_selector=self.learned_price_selector or other.learned_price_selector,
             learned_title_selector=self.learned_title_selector or other.learned_title_selector,
             learned_image_selector=self.learned_image_selector or other.learned_image_selector,
