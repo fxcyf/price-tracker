@@ -33,10 +33,10 @@
       "price": "ok",
       "title": "ok",
       "image": "ok",
-      "brand": null,
-      "in_stock": null
+      "brand": "ok",
+      "in_stock": "ok"
     },
-    "note": "Madewell accessories PDP"
+    "note": "Madewell accessories PDP — JSON-LD Product with brand+availability"
   },
   {
     "url": "https://www.uniqlo.com/us/en/products/E483872-000/00?colorDisplayCode=31&sizeDisplayCode=003",
@@ -46,10 +46,10 @@
       "price": "ok",
       "title": "ok",
       "image": "ok",
-      "brand": null,
-      "in_stock": null
+      "brand": "ok",
+      "in_stock": "ok"
     },
-    "note": "Uniqlo US — OG price tags, no availability data"
+    "note": "Uniqlo US — JSON-LD @graph with brand=UNIQLO and availability"
   },
   {
     "url": "https://www.cos.com/en-us/women/womenswear/trousers/linen/product/belted-linen-barrel-leg-trousers-beige-1322314001",
@@ -59,10 +59,10 @@
       "price": "ok",
       "title": "ok",
       "image": "ok",
-      "brand": null,
-      "in_stock": null
+      "brand": "ok",
+      "in_stock": "ok"
     },
-    "note": "COS clothing — clean JSON-LD"
+    "note": "COS clothing — JSON-LD Product with brand=COS and availability"
   },
   {
     "url": "https://www.everlane.com/products/womens-wide-leg-drawstring-pant-in-linen-navy",
@@ -111,10 +111,10 @@
       "price": "ok",
       "title": "ok",
       "image": "ok",
-      "brand": null,
-      "in_stock": null
+      "brand": "ok",
+      "in_stock": "ok"
     },
-    "note": "Maison Kitsune — handled via platform rules or JSON-LD"
+    "note": "Maison Kitsune — microdata itemprop brand+availability (no Product JSON-LD)"
   },
   {
     "url": "https://www.tntsupermarket.us/chs/53686601-ming-artisan-coffee-cookies-gift-set.html",
