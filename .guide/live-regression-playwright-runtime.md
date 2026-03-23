@@ -1,60 +1,103 @@
-# Live Regression: Playwright Runtime Pitfall
+# Live Regression: Test Setup and cases.json
 
-## What happened
+## Overview
 
-When running `backend/tests/test_live_regression.py` with `--run-live`, some URLs require Playwright fallback.
-If the Playwright browser runtime is missing, tests fail with:
+Live regression tests are driven by `tests/cases.json` and run via `test_live_cases.py`.
+Each entry declares what a URL is expected to yield per field, rather than a flat good/bad split.
 
-- `BrowserType.launch_persistent_context: Executable doesn't exist`
+## Running tests
 
-This is an environment issue, not necessarily a scraper regression.
+```bash
+# All cases
+python -m pytest --run-live tests/test_live_cases.py -v -s
 
-## Workflow to validate goodcase/badcase safely
+# Single case by label
+python -m pytest --run-live tests/test_live_cases.py -v -s -k "everlane"
 
-1. Run with module form to ensure interpreter consistency:
-   - `python -m pytest tests/test_live_regression.py --run-live -q`
-2. Treat missing browser runtime as infra/setup problem.
-3. Keep badcase classifications aligned with runtime behavior:
-   - Include `fetch-failed` when generic fetch exceptions are possible.
-4. In live tests, skip only the cases blocked by missing Playwright runtime instead of failing the whole suite.
+# Cookie-backed cases (requires a curl export file)
+python -m pytest --run-live --live-curl-file=curl.txt tests/test_live_cases.py -v -s -k "freepeople"
+```
 
-## Code-level lessons
+## cases.json schema
 
-- `test_live_regression.py` should classify `fetch-failed` in badcase assertions.
-- Goodcase live tests should skip (not fail) when Playwright executable is unavailable in current environment.
-- `fetcher.py` should degrade gracefully when `playwright_stealth` is not installed (warn and continue without stealth).
-- For `fetch_with_stored_cookies`, do not require the generic `len(html) >= 5000` completeness gate.
-  A short but non-blocked `200` cookie-backed HTML is often still parseable and should be returned to avoid unnecessary Playwright fallback.
+Each entry has:
 
-## Case list maintenance rule
+| Field | Type | Meaning |
+|---|---|---|
+| `url` | string | Product page URL |
+| `label` | string | Unique identifier used as pytest ID (e.g. `everlane/cardigan-xs-oos`) |
+| `fetch` | `"ok"` \| `"blocked"` \| `"needs-cookies"` | Expected fetch outcome |
+| `expect` | object | Per-field assertions (see below) |
+| `note` | string | Human-readable explanation |
 
-- If a `goodcase` URL consistently raises `SiteBlockedError` under current live conditions, reclassify it into `badcase` rather than keeping it in `goodcase`.
-- Keep `goodcase` focused on URLs that can produce complete extraction without manual cookie import.
-- Re-validate with:
-  - `python -m pytest tests/test_live_regression.py --run-live -q`
+### Fetch expectation values
 
-## FreePeople/JS-heavy cookie behavior
+- `"ok"` — fetch must succeed (default)
+- `"blocked"` — `SiteBlockedError` expected; test is skipped (not failed)
+- `"needs-cookies"` — `CookiesExpiredError` expected without `--live-curl-file`; test is skipped unless curl file provided
 
-- Some domains need both:
-  - imported cookies
-  - browser rendering (Playwright)
-- For JS-heavy domains (`freepeople.com`, `urbanoutfitters.com`, `aritzia.com`), route cookie-backed requests directly to Playwright with cookies attached to browser context, instead of cookie-httpx first.
-- This avoids returning shell HTML and improves success rate for anti-bot storefronts.
-- If Playwright+cookies is still blocked, retry once with cookie-httpx before failing.
-  Different anti-bot paths can block headless rendering while still allowing cookie-backed HTTP response.
+### Field assertion values
 
-## `test_scraper.py` pitfalls
+For all fields except `in_stock`:
+- `"ok"` — field must be non-None
+- `"none"` — field must be None
+- `null` — no assertion (unknown or irrelevant for this URL)
 
-- `--live <url>` never loads stored/imported cookies from DB; it always calls `fetch_page(url)` without cookies.
-- To validate cookie-based bypass, use `--live-curl` so cookies are parsed and passed to `fetch_page(..., stored_cookies=...)`.
-- On zsh, always quote URLs containing `?`:
-  - `python test_scraper.py --live "https://.../?color=011"`
+For `in_stock`:
+- `"ok"` — must be `True` or `False` (site exposes availability either way)
+- `"true"` — must be `True` (in stock)
+- `"false"` — must be `False` (out of stock)
+- `"none"` — must be `None` (site doesn't expose availability)
+- `null` — no assertion
 
-## Graduation test path (badcase -> goodcase)
+### Example entry
 
-- Add a dedicated pytest lane for cookie-backed graduation checks:
-  - `python -m pytest tests/test_live_cookie_regression.py --run-live --live-curl-file curl -q`
-- This lane is intentionally strict:
-  - cookie-backed fetch must not raise `SiteBlockedError` / `CookiesExpiredError`
-  - extraction must produce a price
-- Keep this lane opt-in (requires both `--run-live` and `--live-curl-file`) so normal CI remains stable.
+```json
+{
+  "url": "https://www.everlane.com/products/womens-crew-cardigan-in-alpaca-heather-gray-mist?variant=43455812304982",
+  "label": "everlane/cardigan-xs-oos",
+  "fetch": "ok",
+  "expect": {
+    "price":    "ok",
+    "title":    "ok",
+    "image":    "ok",
+    "brand":    "ok",
+    "in_stock": "ok"
+  },
+  "note": "Everlane ProductGroup with explicit variant= param; XS was OOS when added — tests variant ID matching"
+}
+```
+
+## Adding a new case
+
+1. Add an entry to `tests/cases.json` with `fetch: "ok"` and all `expect` values as `null`.
+2. Run the test: `python -m pytest --run-live tests/test_live_cases.py -v -s -k "your-label"`
+3. Inspect output — each field is printed with `✓`/`✗`/`(unchecked)`.
+4. Fill in `expect` with `"ok"` for fields that extract cleanly and `"none"` for fields the site doesn't expose.
+5. If fetch fails with `SiteBlockedError`, change `fetch` to `"blocked"`. If it requires cookies, set `fetch` to `"needs-cookies"`.
+
+## Graduating a blocked/needs-cookies URL
+
+If a previously blocked URL starts working:
+1. Run: `python -m pytest --run-live tests/test_live_cases.py -v -s -k "label"`
+2. If fetch succeeds unexpectedly, the test will fail with a message telling you to update `fetch` in `cases.json`.
+3. Update `fetch: "ok"` and fill in `expect` assertions.
+
+## Playwright runtime pitfall
+
+Some URLs require Playwright fallback. If the Playwright browser runtime is missing, tests fail with:
+```
+BrowserType.launch_persistent_context: Executable doesn't exist
+```
+This is an environment issue. The test runner skips (does not fail) when the Playwright executable is unavailable.
+
+## cookie-backed fetch notes
+
+- `needs-cookies` cases require `--live-curl-file=<path>` to run.
+- Cookies are parsed from the curl export and injected as `stored_cookies` into `fetch_page()`.
+- JS-heavy domains (`freepeople.com`, `aritzia.com`) route cookie-backed requests directly to Playwright with cookies attached to the browser context.
+- `test_scraper.py --live-curl curl.txt` is the fastest way to debug a single cookie-backed URL interactively.
+
+## Deprecated files
+
+`test_live_regression.py` and `test_live_stock_regression.py` are kept for backward compatibility but superseded by `test_live_cases.py`. Do not add new URLs to the old goodcase/badcase text files.

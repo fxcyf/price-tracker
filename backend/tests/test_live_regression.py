@@ -1,4 +1,9 @@
-"""Live regression suite backed by goodcase/badcase URL lists."""
+"""
+Live regression suite backed by goodcase/badcase URL lists.
+
+DEPRECATED — superseded by test_live_cases.py which drives per-field
+assertions from tests/cases.json.  Kept for backward compatibility.
+"""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch

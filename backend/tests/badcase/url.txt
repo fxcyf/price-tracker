@@ -1,7 +1,0 @@
-https://www.tntsupermarket.us/chs/53686601-ming-artisan-coffee-cookies-gift-set.html
-https://www.homedepot.com/p/Google-Nest-Cam-with-Floodlight-Wired-Outdoor-Smart-Home-Security-Camera-GA02411-US/317817123?g_store=4711&source=shoppingads&locale=en-US&fp=ggl
-https://www.bestbuy.com/product/google-nest-cam-indoor-outdoor-wire-free-security-camera-snow/JJ8T5C76XQ/sku/6473262?utm_source=feed&extStoreId=498
-https://www.urbanoutfitters.com/shop/bdg-front-runner-printed-mid-rise-baggy-jort?color=029&curation_id=going-out-outfits&curation_name=Festival%20Edit%3A%20LP
-https://www.freepeople.com/shop/we-the-free-brooklyn-tee/?color=011
-# cookie-backed scrape can pass with fresh browser cookies; keep in badcase for anonymous regression.
-https://www.aritzia.com/us/en/product/bare-cashmere-exemplar-cardigan/121635.html?color=4425

@@ -1,0 +1,191 @@
+[
+  {
+    "url": "https://www.target.com/p/boost-mobile-google-pixel-10/-/A-1007844339?TCID=OGS&AFID=google&CPNG=Electronics+-+Target+Plus&adgroup=80-6",
+    "label": "target/pixel-10",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Target electronics PDP — OG price tags"
+  },
+  {
+    "url": "https://bananarepublicfactory.gapfactory.com/browse/product.do?pid=1173363011&vid=1",
+    "label": "gapfactory/pants",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "GAP Factory clothing — JSON-LD Offer"
+  },
+  {
+    "url": "https://www.madewell.com/p/womens/accessories/bags/bucket-bags/the-signature-woven-bucket-bag/NZ761/?ccode=BL8895",
+    "label": "madewell/bucket-bag",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Madewell accessories PDP"
+  },
+  {
+    "url": "https://www.uniqlo.com/us/en/products/E483872-000/00?colorDisplayCode=31&sizeDisplayCode=003",
+    "label": "uniqlo/clothing",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Uniqlo US — OG price tags, no availability data"
+  },
+  {
+    "url": "https://www.cos.com/en-us/women/womenswear/trousers/linen/product/belted-linen-barrel-leg-trousers-beige-1322314001",
+    "label": "cos/linen-trousers",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "COS clothing — clean JSON-LD"
+  },
+  {
+    "url": "https://www.everlane.com/products/womens-wide-leg-drawstring-pant-in-linen-navy",
+    "label": "everlane/wide-leg-pant",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": "ok",
+      "in_stock": "ok"
+    },
+    "note": "Everlane Shopify ProductGroup — no variant param, falls back to first in-stock variant"
+  },
+  {
+    "url": "https://www.everlane.com/products/womens-crew-cardigan-in-alpaca-heather-gray-mist?variant=43455812304982",
+    "label": "everlane/cardigan-xs-oos",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": "ok",
+      "in_stock": "ok"
+    },
+    "note": "Everlane ProductGroup with explicit variant= param; XS was OOS when added — tests variant ID matching"
+  },
+  {
+    "url": "https://www.amazon.com/Galison-Fireworks-Jubilee-Featuring-Overlooking/dp/0735388105/",
+    "label": "amazon/book",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Amazon book — OG price + JSON-LD; availability in offers is variable"
+  },
+  {
+    "url": "https://maisonkitsune.com/us/fox-head-intarsia-merino-high-neck-cardigan-sage-green-ecru-67846a48efc06.html",
+    "label": "maisonkitsune/cardigan",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Maison Kitsune — handled via platform rules or JSON-LD"
+  },
+  {
+    "url": "https://www.tntsupermarket.us/chs/53686601-ming-artisan-coffee-cookies-gift-set.html",
+    "label": "tntsupermarket/cookies-gift-set",
+    "fetch": "ok",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "T&T Supermarket — JS-heavy; requires Playwright + fresh cookies to scrape"
+  },
+  {
+    "url": "https://www.homedepot.com/p/Google-Nest-Cam-with-Floodlight-Wired-Outdoor-Smart-Home-Security-Camera-GA02411-US/317817123",
+    "label": "homedepot/nest-cam",
+    "fetch": "blocked",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Home Depot — bot-protected; needs Playwright"
+  },
+  {
+    "url": "https://www.bestbuy.com/product/google-nest-cam-indoor-outdoor-wire-free-security-camera-snow/JJ8T5C76XQ/sku/6473262",
+    "label": "bestbuy/nest-cam",
+    "fetch": "blocked",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Best Buy — bot-protected; needs Playwright"
+  },
+  {
+    "url": "https://www.urbanoutfitters.com/shop/bdg-front-runner-printed-mid-rise-baggy-jort?color=029",
+    "label": "urbanoutfitters/jort",
+    "fetch": "blocked",
+    "expect": {},
+    "note": "Urban Outfitters — bot-protected; needs Playwright"
+  },
+  {
+    "url": "https://www.freepeople.com/shop/we-the-free-brooklyn-tee/?color=011",
+    "label": "freepeople/brooklyn-tee",
+    "fetch": "blocked",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Free People — PerimeterX; price parses correctly with valid cookies"
+  },
+  {
+    "url": "https://www.aritzia.com/us/en/product/bare-cashmere-exemplar-cardigan/121635.html?color=4425",
+    "label": "aritzia/cardigan",
+    "fetch": "blocked",
+    "expect": {
+      "price": "ok",
+      "title": "ok",
+      "image": "ok",
+      "brand": null,
+      "in_stock": null
+    },
+    "note": "Aritzia — PerimeterX; price parses correctly with valid cookies"
+  }
+]

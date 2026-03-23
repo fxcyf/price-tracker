@@ -1,0 +1,2 @@
+- Enable stock information scraping
+- Notified when out-of-stock products become in-stock

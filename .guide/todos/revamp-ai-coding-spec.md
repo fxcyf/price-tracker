@@ -1,0 +1,3 @@
+- 将 .guide 重新组织为层级结构，以方便渐进式披露
+- make the allowed commands persistent across all sessinos in the current project
+- 在 Agents.md 中写清楚标准流程为，先plan再实施，plan需要记录在.guide/plans中,plan实现完成后，需要更新.guide/

@@ -9,7 +9,7 @@ plus the core happy paths.
 import json
 import pytest
 from tests.conftest import load_fixture, make_html
-from app.scrapers.extractors.opengraph import extract_opengraph
+from app.scrapers.extractors.opengraph import extract_opengraph, _parse_availability
 
 
 URL = "https://www.example.com/product/123"
@@ -327,3 +327,282 @@ class TestFixtures:
         result = extract_opengraph(html, "https://www.unknownstore.com/products/x900")
         assert result.price is None
         assert result.title is None
+
+
+# ---------------------------------------------------------------------------
+# _parse_availability normalizer
+# ---------------------------------------------------------------------------
+
+class TestParseAvailability:
+    """Unit tests for the _parse_availability() string normalizer."""
+
+    @pytest.mark.parametrize("raw,expected", [
+        # schema.org full URI — most common in JSON-LD
+        ("https://schema.org/InStock",           True),
+        ("http://schema.org/InStock",            True),
+        ("https://schema.org/OutOfStock",        False),
+        ("https://schema.org/PreOrder",          True),
+        ("https://schema.org/LimitedAvailability", True),
+        ("https://schema.org/OnlineOnly",        True),
+        ("https://schema.org/Discontinued",      False),
+        ("https://schema.org/SoldOut",           False),
+        # Short-form strings
+        ("InStock",          True),
+        ("OutOfStock",       False),
+        ("PreOrder",         True),
+        ("Discontinued",     False),
+        ("SoldOut",          False),
+        # Plain-text OG values (spaces and hyphens)
+        ("in stock",         True),
+        ("out of stock",     False),
+        ("in-stock",         True),
+        ("out-of-stock",     False),
+        # Whitespace normalised
+        ("  InStock  ",      True),
+        ("  out of stock  ", False),
+        # Unknown / empty → None
+        ("",                 None),
+        ("available",        None),
+        ("unknown_value",    None),
+    ])
+    def test_normalizes_correctly(self, raw, expected):
+        assert _parse_availability(raw) == expected
+
+
+# ---------------------------------------------------------------------------
+# JSON-LD availability → in_stock field
+# ---------------------------------------------------------------------------
+
+class TestJsonLdAvailability:
+    """Tests that in_stock is populated from the JSON-LD offer availability field."""
+
+    def _html(self, payload: dict) -> str:
+        return make_html(
+            f'<script type="application/ld+json">{json.dumps(payload)}</script>'
+        )
+
+    def test_instock_full_uri_sets_true(self):
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": {
+                "@type": "Offer", "price": 49.99, "priceCurrency": "USD",
+                "availability": "https://schema.org/InStock",
+            },
+        })
+        assert extract_opengraph(html, URL).in_stock is True
+
+    def test_outofstock_full_uri_sets_false(self):
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": {
+                "@type": "Offer", "price": 0.0,
+                "availability": "https://schema.org/OutOfStock",
+            },
+        })
+        assert extract_opengraph(html, URL).in_stock is False
+
+    def test_preorder_treated_as_in_stock(self):
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": {
+                "@type": "Offer", "price": 99.0,
+                "availability": "https://schema.org/PreOrder",
+            },
+        })
+        assert extract_opengraph(html, URL).in_stock is True
+
+    def test_no_availability_field_returns_none(self):
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": {"@type": "Offer", "price": 49.99},
+        })
+        assert extract_opengraph(html, URL).in_stock is None
+
+    def test_short_form_instock_string(self):
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": {"@type": "Offer", "price": 25.0, "availability": "InStock"},
+        })
+        assert extract_opengraph(html, URL).in_stock is True
+
+    def test_multiple_offers_instock_selected_sets_true(self):
+        """The InStock offer is chosen AND in_stock should reflect that."""
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": [
+                {"@type": "Offer", "price": 99.99, "availability": "https://schema.org/OutOfStock"},
+                {"@type": "Offer", "price": 79.99, "availability": "https://schema.org/InStock"},
+            ],
+        })
+        result = extract_opengraph(html, URL)
+        assert result.price == 79.99  # correct offer selected
+        assert result.in_stock is True
+
+    def test_all_offers_outofstock_sets_false(self):
+        """Falls back to first offer (OOS) → in_stock False."""
+        html = self._html({
+            "@type": "Product", "name": "Widget",
+            "offers": [
+                {"@type": "Offer", "price": 45.00, "availability": "https://schema.org/OutOfStock"},
+                {"@type": "Offer", "price": 50.00, "availability": "https://schema.org/OutOfStock"},
+            ],
+        })
+        assert extract_opengraph(html, URL).in_stock is False
+
+
+# ---------------------------------------------------------------------------
+# ProductGroup (Shopify / Everlane pattern) → variant resolution
+# ---------------------------------------------------------------------------
+
+class TestProductGroupVariantResolution:
+    """
+    Guards the fix for ProductGroup + hasVariant (Shopify-style JSON-LD).
+    Everlane was returning in_stock=None because the top-level @type was
+    ProductGroup, which the extractor previously ignored entirely.
+    """
+
+    VARIANT_A_ID = "43455812272214"
+    VARIANT_B_ID = "43455812304982"
+
+    def _html(self, payload: dict, url: str = URL) -> str:
+        return make_html(
+            f'<script type="application/ld+json">{json.dumps(payload)}</script>'
+        )
+
+    def _group(self, variants: list, extra: dict | None = None) -> dict:
+        base = {
+            "@context": "http://schema.org/",
+            "@type": "ProductGroup",
+            "name": "Test Cardigan",
+            "brand": {"@type": "Brand", "name": "TestBrand"},
+            "category": "Knitwear",
+            "hasVariant": variants,
+        }
+        if extra:
+            base.update(extra)
+        return base
+
+    def _variant(self, variant_id: str, price: float, availability: str) -> dict:
+        return {
+            "@type": "Product",
+            "@id": f"/products/item?variant={variant_id}#variant",
+            "name": f"Test Cardigan - Size {variant_id[-3:]}",
+            "image": "https://example.com/img.jpg",
+            "offers": {
+                "@type": "Offer",
+                "price": str(price),
+                "priceCurrency": "USD",
+                "availability": availability,
+                "url": f"https://example.com/products/item?variant={variant_id}",
+            },
+        }
+
+    def test_variant_matched_by_query_param_outofstock(self):
+        """Exact variant= match picks the correct out-of-stock variant."""
+        group = self._group([
+            self._variant(self.VARIANT_A_ID, 118.0, "http://schema.org/InStock"),
+            self._variant(self.VARIANT_B_ID, 118.0, "http://schema.org/OutOfStock"),
+        ])
+        url = f"https://example.com/products/item?variant={self.VARIANT_B_ID}"
+        result = extract_opengraph(self._html(group), url)
+        assert result.in_stock is False
+
+    def test_variant_matched_by_query_param_instock(self):
+        """Exact variant= match picks the correct in-stock variant."""
+        group = self._group([
+            self._variant(self.VARIANT_A_ID, 118.0, "http://schema.org/OutOfStock"),
+            self._variant(self.VARIANT_B_ID, 118.0, "http://schema.org/InStock"),
+        ])
+        url = f"https://example.com/products/item?variant={self.VARIANT_B_ID}"
+        result = extract_opengraph(self._html(group), url)
+        assert result.in_stock is True
+
+    def test_no_variant_param_falls_back_to_first_instock(self):
+        """Without a variant= param, first in-stock variant is preferred."""
+        group = self._group([
+            self._variant(self.VARIANT_A_ID, 118.0, "http://schema.org/OutOfStock"),
+            self._variant(self.VARIANT_B_ID, 98.0, "http://schema.org/InStock"),
+        ])
+        result = extract_opengraph(self._html(group), "https://example.com/products/item")
+        assert result.in_stock is True
+        assert result.price == 98.0
+
+    def test_all_variants_outofstock_returns_false(self):
+        """Falls back to first variant when none are in-stock → False."""
+        group = self._group([
+            self._variant(self.VARIANT_A_ID, 118.0, "http://schema.org/OutOfStock"),
+            self._variant(self.VARIANT_B_ID, 118.0, "http://schema.org/OutOfStock"),
+        ])
+        result = extract_opengraph(self._html(group), "https://example.com/products/item")
+        assert result.in_stock is False
+
+    def test_group_brand_and_category_propagated_to_variant(self):
+        """Brand and category from the ProductGroup are available on the result."""
+        group = self._group([
+            self._variant(self.VARIANT_A_ID, 118.0, "http://schema.org/InStock"),
+        ])
+        result = extract_opengraph(self._html(group), "https://example.com/products/item")
+        assert result.brand == "TestBrand"
+        assert result.category == "Knitwear"
+
+    def test_price_extracted_from_resolved_variant(self):
+        """Price comes from the resolved variant's offer."""
+        group = self._group([
+            self._variant(self.VARIANT_A_ID, 89.0, "http://schema.org/OutOfStock"),
+            self._variant(self.VARIANT_B_ID, 118.0, "http://schema.org/InStock"),
+        ])
+        result = extract_opengraph(self._html(group), "https://example.com/products/item")
+        assert result.price == 118.0  # first in-stock variant
+
+
+# ---------------------------------------------------------------------------
+# OG product:availability meta tag → in_stock field
+# ---------------------------------------------------------------------------
+
+class TestOGAvailabilityMeta:
+    """Tests that in_stock is populated from <meta property="product:availability">."""
+
+    def test_property_in_stock(self):
+        html = make_html('<meta property="product:availability" content="in stock">')
+        assert extract_opengraph(html, URL).in_stock is True
+
+    def test_property_out_of_stock(self):
+        html = make_html('<meta property="product:availability" content="out of stock">')
+        assert extract_opengraph(html, URL).in_stock is False
+
+    def test_name_attribute_also_works(self):
+        """_meta_content checks name= as well as property=."""
+        html = make_html('<meta name="product:availability" content="in stock">')
+        assert extract_opengraph(html, URL).in_stock is True
+
+    def test_no_availability_meta_returns_none(self):
+        html = make_html('<meta property="og:title" content="Some Product">')
+        assert extract_opengraph(html, URL).in_stock is None
+
+    def test_jsonld_wins_over_og_meta(self):
+        """JSON-LD is parsed before OG meta; left-wins merge means JSON-LD value is kept."""
+        payload = {
+            "@type": "Product", "name": "W",
+            "offers": {
+                "@type": "Offer", "price": 1,
+                "availability": "https://schema.org/InStock",
+            },
+        }
+        html = make_html(
+            '<meta property="product:availability" content="out of stock">'
+            f'<script type="application/ld+json">{json.dumps(payload)}</script>'
+        )
+        # JSON-LD sets in_stock=True first; OG meta should not overwrite it
+        assert extract_opengraph(html, URL).in_stock is True
+
+    def test_og_meta_fills_in_when_jsonld_has_no_availability(self):
+        """OG meta acts as fallback when JSON-LD offer omits availability."""
+        payload = {
+            "@type": "Product", "name": "W",
+            "offers": {"@type": "Offer", "price": 1},  # no availability
+        }
+        html = make_html(
+            '<meta property="product:availability" content="in stock">'
+            f'<script type="application/ld+json">{json.dumps(payload)}</script>'
+        )
+        assert extract_opengraph(html, URL).in_stock is True
