@@ -107,10 +107,22 @@ export default function ProductCard({ product }: ProductCardProps) {
             {product.title ?? product.url}
           </Link>
 
-          {/* Price */}
-          <p className="text-sm font-bold tabular-nums sm:text-base">
-            {formatPrice(product.current_price, product.currency)}
-          </p>
+          {/* Price + stock status */}
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold tabular-nums sm:text-base">
+              {formatPrice(product.current_price, product.currency)}
+            </p>
+            {product.in_stock === true && (
+              <Badge className="h-4 bg-green-100 px-1.5 text-[10px] font-medium text-green-700 hover:bg-green-100">
+                In stock
+              </Badge>
+            )}
+            {product.in_stock === false && (
+              <Badge className="h-4 bg-muted px-1.5 text-[10px] font-medium text-muted-foreground hover:bg-muted">
+                Out of stock
+              </Badge>
+            )}
+          </div>
 
           {/* Tags — hidden on very small screens to save space */}
           {product.tags.length > 0 && (

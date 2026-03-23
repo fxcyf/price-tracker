@@ -16,11 +16,13 @@ interface WatchConfigCardProps {
 export default function WatchConfigCard({ productId, initial }: WatchConfigCardProps) {
   const [isActive, setIsActive] = useState(true);
   const [dropPct, setDropPct] = useState(5);
+  const [notifyOnRestock, setNotifyOnRestock] = useState(false);
 
   useEffect(() => {
     if (initial) {
       setIsActive(initial.is_active);
       setDropPct(initial.alert_on_drop_pct);
+      setNotifyOnRestock(initial.notify_on_restock);
     }
   }, [initial]);
 
@@ -42,6 +44,7 @@ export default function WatchConfigCard({ productId, initial }: WatchConfigCardP
       upsertWatchConfig(productId, {
         is_active: isActive,
         alert_on_drop_pct: dropPct,
+        notify_on_restock: notifyOnRestock,
       }).then((r) => r.data),
     onSuccess: (updated) => {
       queryClient.setQueryData(["watch", productId], updated);
@@ -109,6 +112,31 @@ export default function WatchConfigCard({ productId, initial }: WatchConfigCardP
           Send an email alert when price falls by at least this percentage from the previous check.
           Set to 0 to alert on any drop.
         </p>
+      </div>
+
+      {/* Restock alert toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Alert when back in stock</p>
+          <p className="text-xs text-muted-foreground">Notify when an out-of-stock product becomes available</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={notifyOnRestock}
+          onClick={() => setNotifyOnRestock((v) => !v)}
+          className={cn(
+            "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            notifyOnRestock ? "bg-primary" : "bg-input"
+          )}
+        >
+          <span
+            className={cn(
+              "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition-transform",
+              notifyOnRestock ? "translate-x-5" : "translate-x-0"
+            )}
+          />
+        </button>
       </div>
 
       {/* Last checked + Check Now */}

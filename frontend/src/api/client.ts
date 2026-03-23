@@ -22,6 +22,7 @@ export interface Product {
   brand: string | null;
   current_price: number | null;
   currency: string;
+  in_stock: boolean | null;
   tags: Tag[];
   created_at: string;
   updated_at: string;
@@ -62,6 +63,7 @@ export interface WatchConfig {
   product_id: string;
   alert_on_drop_pct: number;
   is_active: boolean;
+  notify_on_restock: boolean;
   last_checked_at: string | null;
   created_at: string;
 }
@@ -69,6 +71,7 @@ export interface WatchConfig {
 export interface WatchConfigIn {
   alert_on_drop_pct?: number;
   is_active?: boolean;
+  notify_on_restock?: boolean;
 }
 
 export interface Settings {

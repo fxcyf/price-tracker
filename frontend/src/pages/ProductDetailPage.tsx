@@ -217,6 +217,16 @@ export default function ProductDetailPage() {
                 {product.category && (
                   <Badge variant="outline">{product.category}</Badge>
                 )}
+                {product.in_stock === true && (
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                    In stock
+                  </Badge>
+                )}
+                {product.in_stock === false && (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Out of stock
+                  </Badge>
+                )}
               </div>
 
               <TagInput
