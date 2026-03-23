@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import cookies, parse, prices, products, settings, watch
+from app.api import cookies, dev, parse, prices, products, settings, watch
 from app.core.config import get_settings
 
 _settings = get_settings()
@@ -34,6 +34,7 @@ app.include_router(watch.router, prefix="/api")
 app.include_router(parse.router, prefix="/api")
 app.include_router(cookies.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(dev.router, prefix="/api")
 
 
 @app.get("/health")

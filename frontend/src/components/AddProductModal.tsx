@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShoppingBag, AlertCircle, Clipboard, Cookie, Loader2, ChevronDown, ChevronUp } from "lucide-react";
-import { parseUrl, createProduct, importCookies, getTags, type ParseDebug, type ParsePreview } from "@/api/client";
+import { ShoppingBag, AlertCircle, Clipboard, Cookie, Loader2, ChevronDown, ChevronUp, FlaskConical, Check } from "lucide-react";
+import { parseUrl, createProduct, importCookies, getTags, addTestCase, type ParseDebug, type ParsePreview, type TestCaseIn } from "@/api/client";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -344,10 +344,14 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
               </div>
             )}
 
-            {/* Scrape trace — dev only */}
             {/* Scrape trace — shown when ?debug is in the URL */}
             {debugMode && preview.debug && (
               <ScrapeDebugPanel debug={preview.debug} />
+            )}
+
+            {/* Add to test cases — debug only */}
+            {debugMode && (
+              <AddToTestCasePanel url={url} preview={preview} />
             )}
 
             {/* Tags */}
@@ -448,6 +452,166 @@ function ScrapeDebugPanel({ debug }: { debug: ParseDebug }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add to Test Cases panel (dev only) ──────────────────────────────────────
+
+function autoLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    const domain = u.hostname.replace(/^www\./, "").split(".")[0];
+    const parts = u.pathname.replace(/\/$/, "").split("/").filter(Boolean);
+    const slug = parts[parts.length - 1] || "page";
+    // Truncate slug to something readable
+    const shortSlug = slug.length > 30 ? slug.slice(0, 30) : slug;
+    return `${domain}/${shortSlug}`;
+  } catch {
+    return "";
+  }
+}
+
+function deriveExpect(preview: ParsePreview): Record<string, string | null> {
+  const expect: Record<string, string | null> = {};
+  if (preview.price !== null) expect.price = "ok";
+  if (preview.title !== null) expect.title = "ok";
+  if (preview.image_url !== null) expect.image = "ok";
+  // brand and in_stock: check debug fields if available
+  const brand = preview.debug?.fields?.brand;
+  if (brand && brand.value !== null && brand.value !== undefined) {
+    expect.brand = "ok";
+  }
+  const inStock = preview.debug?.fields?.in_stock;
+  if (inStock && inStock.value !== null && inStock.value !== undefined) {
+    expect.in_stock = "ok";
+  }
+  return expect;
+}
+
+const EXPECT_FIELDS = ["price", "title", "image", "brand", "in_stock"] as const;
+function AddToTestCasePanel({ url, preview }: { url: string; preview: ParsePreview }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState(() => autoLabel(url));
+  const [note, setNote] = useState("");
+  const [expect, setExpect] = useState<Record<string, string | null>>(() => deriveExpect(preview));
+
+  const mutation = useMutation({
+    mutationFn: (data: TestCaseIn) => addTestCase(data),
+    onSuccess: () => {
+      toast({ title: "Added to test cases" });
+      setOpen(false);
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail ?? "Failed to add test case";
+      toast({ title: detail, variant: "destructive" });
+    },
+  });
+
+  function handleSubmit() {
+    const expectPayload: Record<string, string | null> = {};
+    for (const f of EXPECT_FIELDS) {
+      expectPayload[f] = expect[f] === "skip" ? null : (expect[f] ?? null);
+    }
+    mutation.mutate({
+      url: url.trim(),
+      label,
+      fetch: "ok",
+      expect: expectPayload,
+      note,
+    });
+  }
+
+  function cycleExpect(field: string) {
+    setExpect((prev) => {
+      const current = prev[field];
+      // cycle: ok → none → skip → ok
+      const next = current === "ok" ? "none" : current === "none" ? "skip" : "ok";
+      return { ...prev, [field]: next };
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-green-500/50 bg-green-500/5 p-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-xs font-semibold text-green-600 dark:text-green-400"
+      >
+        <span className="flex items-center gap-1.5">
+          <FlaskConical className="h-3.5 w-3.5" />
+          DEV · Add to Test Cases
+        </span>
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          {/* Label */}
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Label</label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="domain/slug"
+              className="h-7 text-xs"
+            />
+          </div>
+
+          {/* Expected fields */}
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Expected fields (click to cycle)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {EXPECT_FIELDS.map((field) => {
+                const val = expect[field] ?? "skip";
+                const colors: Record<string, string> = {
+                  ok: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30",
+                  none: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
+                  skip: "bg-muted text-muted-foreground border-muted",
+                };
+                return (
+                  <button
+                    key={field}
+                    type="button"
+                    onClick={() => cycleExpect(field)}
+                    className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${colors[val]}`}
+                  >
+                    {field.replace("_", " ")}
+                    <span className="opacity-60">= {val}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Note */}
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Note</label>
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Description of this test case"
+              className="h-7 text-xs"
+            />
+          </div>
+
+          {/* Submit */}
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={mutation.isPending || mutation.isSuccess}
+            className="w-full text-xs"
+          >
+            {mutation.isPending ? (
+              <><Loader2 className="mr-1.5 h-3 w-3 animate-spin" />Adding…</>
+            ) : mutation.isSuccess ? (
+              <><Check className="mr-1.5 h-3 w-3" />Added</>
+            ) : (
+              <><FlaskConical className="mr-1.5 h-3 w-3" />Add to cases.json</>
+            )}
+          </Button>
         </div>
       )}
     </div>

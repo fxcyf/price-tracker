@@ -188,3 +188,26 @@ export const getSettings = () =>
 
 export const updateSettings = (data: SettingsIn) =>
   api.put<Settings>("/api/settings", data);
+
+// ---------------------------------------------------------------------------
+// Dev helpers (DEBUG mode only)
+// ---------------------------------------------------------------------------
+
+export interface TestCaseExpect {
+  price?: string | null;
+  title?: string | null;
+  image?: string | null;
+  brand?: string | null;
+  in_stock?: string | null;
+}
+
+export interface TestCaseIn {
+  url: string;
+  label?: string;
+  fetch?: string;
+  expect?: TestCaseExpect;
+  note?: string;
+}
+
+export const addTestCase = (data: TestCaseIn) =>
+  api.post("/api/dev/test-cases", data);
