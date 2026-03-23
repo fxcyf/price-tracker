@@ -23,6 +23,7 @@ class WatchConfig(Base):
         comment="Trigger alert when price drops by this percentage"
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_on_restock: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

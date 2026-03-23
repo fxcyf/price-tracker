@@ -66,6 +66,7 @@ class ProductOut(BaseModel):
     brand: Optional[str]
     current_price: Optional[float]
     currency: str
+    in_stock: Optional[bool]
     tags: list[TagOut]
     created_at: datetime
     updated_at: datetime
@@ -144,6 +145,7 @@ async def create_product(body: ProductCreate, db: DB):
         brand=data.brand,
         current_price=data.price,
         currency=data.currency,
+        in_stock=data.in_stock,
         tags=tags,
     )
     db.add(product)

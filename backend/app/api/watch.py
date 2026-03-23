@@ -21,6 +21,7 @@ class WatchConfigOut(BaseModel):
     product_id: uuid.UUID
     alert_on_drop_pct: float
     is_active: bool
+    notify_on_restock: bool
     last_checked_at: datetime | None
     created_at: datetime
 
@@ -28,6 +29,7 @@ class WatchConfigOut(BaseModel):
 class WatchConfigIn(BaseModel):
     alert_on_drop_pct: float = Field(default=5.0, ge=0.1, le=100.0)
     is_active: bool = True
+    notify_on_restock: bool = False
 
 
 @router.get("/products/{product_id}/watch", response_model=WatchConfigOut)
@@ -74,11 +76,13 @@ async def upsert_watch_config(product_id: uuid.UUID, body: WatchConfigIn, db: DB
     if config:
         config.alert_on_drop_pct = body.alert_on_drop_pct
         config.is_active = body.is_active
+        config.notify_on_restock = body.notify_on_restock
     else:
         config = WatchConfig(
             product_id=product_id,
             alert_on_drop_pct=body.alert_on_drop_pct,
             is_active=body.is_active,
+            notify_on_restock=body.notify_on_restock,
         )
         db.add(config)
 
