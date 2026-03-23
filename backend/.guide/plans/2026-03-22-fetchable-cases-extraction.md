@@ -1,7 +1,7 @@
 # Plan: Improve Extraction for Fetchable Cases
 
 **Date:** 2026-03-22
-**Status:** draft
+**Status:** in-progress
 **Relates to:** tests/cases.json, tests/test_live_cases.py
 
 ## Goal
@@ -166,3 +166,16 @@ After completing each site investigation and extractor change:
 | Tackle Shopify sites first | They share the same JSON-LD structure already handled by opengraph.py; likely zero-code wins | Writing new platform rules first |
 | Leave LLM fallback unchanged | Deterministic rules are verifiable and free; LLM is expensive and non-deterministic | Using LLM to fill brand/in_stock |
 | Work case-by-case and update cases.json incrementally | Keeps changes reviewable; avoids a big-bang update | Batch all changes then validate |
+
+---
+
+## Session log
+
+### 2026-03-22
+- Fetched each `fetch: "ok"` site live and inspected JSON-LD / OG / itemprop signals
+- Fixed `opengraph.py`: unwrap `@graph` wrapper (Uniqlo), check `content` attr in itemprop brand fallback (Maison Kitsune), add `itemprop="availability"` fallback on non-meta elements (Maison Kitsune)
+- Added `brand` field to `PlatformRule`; made `price_selector`/`title_selector` optional; added `madewell.com` rule with `brand="Madewell"` to override internal JSON-LD code "MW"
+- Updated dispatcher to apply platform rule brand as authoritative override after merge
+- Updated `cases.json`: Madewell, COS, Uniqlo, Maison Kitsune now assert `brand: "ok"` and `in_stock: "ok"`
+- Remaining fetchable cases (Target, GAP Factory, Amazon, T&T) have no extractable brand/in_stock in static HTML — left as `null`
+- BestBuy and Urban Outfitters updated to `fetch: "ok"` (user confirmed no longer blocked)
