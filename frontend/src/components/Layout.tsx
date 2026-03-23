@@ -41,12 +41,12 @@ export default function Layout() {
       </aside>
 
       {/* Main content — extra bottom padding on mobile for the nav bar */}
-      <main className="flex-1 overflow-auto pb-16 lg:pb-0">
+      <main className="flex-1 overflow-auto lg:pb-0" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom))" }}>
         <Outlet />
       </main>
 
       {/* Bottom nav bar — mobile/tablet only */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t bg-card lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t bg-card lg:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
