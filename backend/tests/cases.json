@@ -145,7 +145,7 @@
   {
     "url": "https://www.bestbuy.com/product/google-nest-cam-indoor-outdoor-wire-free-security-camera-snow/JJ8T5C76XQ/sku/6473262",
     "label": "bestbuy/nest-cam",
-    "fetch": "blocked",
+    "fetch": "ok",
     "expect": {
       "price": "ok",
       "title": "ok",
@@ -158,7 +158,7 @@
   {
     "url": "https://www.urbanoutfitters.com/shop/bdg-front-runner-printed-mid-rise-baggy-jort?color=029",
     "label": "urbanoutfitters/jort",
-    "fetch": "blocked",
+    "fetch": "ok",
     "expect": {},
     "note": "Urban Outfitters — bot-protected; needs Playwright"
   },
