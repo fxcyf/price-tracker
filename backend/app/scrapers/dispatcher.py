@@ -213,6 +213,11 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> tuple[P
             "title": pr.title_selector,
             "image_url": pr.image_selector,
         }
+        # A hardcoded platform brand is authoritative — override whatever OG/JSON-LD
+        # returned (e.g. Madewell's JSON-LD emits the internal code "MW" instead of
+        # the brand name).
+        if pr.brand:
+            new_result.brand = pr.brand
     _track_fields(result, new_result, "platform_rule", platform_selectors, accumulator)
     result = new_result
     logger.debug("Layer 2a (platform rules) done for %s", url)

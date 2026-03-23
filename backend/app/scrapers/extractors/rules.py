@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PlatformRule:
     platform: str
-    price_selector: str
-    title_selector: str
+    price_selector: str | None = None
+    title_selector: str | None = None
     image_selector: str | None = None
     currency: str = "USD"
+    brand: str | None = None  # hardcoded brand for single-brand retailers
 
 
 # Built-in rules for major platforms
@@ -209,6 +210,13 @@ PLATFORM_RULES: dict[str, PlatformRule] = {
         ),
         currency="USD",
     ),
+    "madewell.com": PlatformRule(
+        platform="madewell",
+        # Price/title/image come reliably from JSON-LD; no stable CSS selectors
+        # (Next.js module-hashed class names). Brand is the only override needed.
+        brand="Madewell",
+        currency="USD",
+    ),
 }
 
 
@@ -281,13 +289,16 @@ def extract_by_rules(html: str, url: str) -> ProductData:
     rule = PLATFORM_RULES[domain]
     data.platform = rule.platform
     data.currency = rule.currency
+    data.brand = rule.brand
 
     soup = BeautifulSoup(html, "lxml")
 
-    price_text = _select_first_text(soup, rule.price_selector)
-    data.price = _parse_price(price_text)
+    if rule.price_selector:
+        price_text = _select_first_text(soup, rule.price_selector)
+        data.price = _parse_price(price_text)
 
-    data.title = _select_first_text(soup, rule.title_selector)
+    if rule.title_selector:
+        data.title = _select_first_text(soup, rule.title_selector)
 
     if rule.image_selector:
         raw_img = _select_first_attr(soup, rule.image_selector, "src")

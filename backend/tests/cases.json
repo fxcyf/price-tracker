@@ -33,10 +33,10 @@
       "price": "ok",
       "title": "ok",
       "image": "ok",
-      "brand": null,
+      "brand": "ok",
       "in_stock": "ok"
     },
-    "note": "Madewell accessories PDP — JSON-LD brand is internal code 'MW', not the brand name"
+    "note": "Madewell accessories PDP — brand overridden via platform rule (JSON-LD emits internal code 'MW')"
   },
   {
     "url": "https://www.uniqlo.com/us/en/products/E483872-000/00?colorDisplayCode=31&sizeDisplayCode=003",
