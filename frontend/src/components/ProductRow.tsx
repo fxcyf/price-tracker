@@ -16,7 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-interface ProductCardProps {
+interface ProductRowProps {
   product: Product;
 }
 
@@ -25,7 +25,7 @@ function formatPrice(price: number | null, currency: string): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(price);
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductRow({ product }: ProductRowProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -51,89 +51,42 @@ export default function ProductCard({ product }: ProductCardProps) {
     <>
       <div
         className={cn(
-          "group relative flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md",
+          "group flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
           isOutOfStock && "opacity-60 grayscale-[30%]"
         )}
       >
-        {/* Delete button */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            setConfirmOpen(true);
-          }}
-          className={cn(
-            "absolute right-2 top-2 z-10 rounded-full bg-background/80 p-1.5 text-muted-foreground backdrop-blur-sm transition-opacity",
-            "opacity-0 group-hover:opacity-100 focus:opacity-100",
-            "sm:opacity-0 sm:group-hover:opacity-100",
-            "@touch:opacity-100"
-          )}
-          aria-label="Remove product"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-
-        {/* Price change badge — top-left */}
-        {pct !== null && pct !== undefined && pct !== 0 && (
-          <div
-            className={cn(
-              "absolute left-2 top-2 z-10 flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
-              pct < 0
-                ? "bg-green-500/90 text-white"
-                : "bg-red-500/90 text-white"
-            )}
-          >
-            {pct < 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
-            {pct > 0 ? "+" : ""}{pct}%
-          </div>
-        )}
-
-        {/* Product image */}
-        <Link to={`/products/${product.id}`} className="block">
-          <div className="relative h-64 w-full overflow-hidden bg-muted sm:h-72">
+        {/* Thumbnail */}
+        <Link to={`/products/${product.id}`} className="shrink-0">
+          <div className="h-16 w-16 overflow-hidden rounded bg-muted">
             {product.image_url ? (
-              <>
-                <img
-                  src={product.image_url}
-                  aria-hidden
-                  className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl opacity-50"
-                />
-                <img
-                  src={product.image_url}
-                  alt={product.title ?? "Product"}
-                  className="relative h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                  loading="lazy"
-                />
-              </>
+              <img
+                src={product.image_url}
+                alt={product.title ?? "Product"}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
             ) : (
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/50">
-                <ShoppingBag className="h-12 w-12 text-muted-foreground/40" />
+              <div className="flex h-full w-full items-center justify-center">
+                <ShoppingBag className="h-6 w-6 text-muted-foreground/40" />
               </div>
             )}
           </div>
         </Link>
 
-        {/* Card body */}
-        <div className="flex flex-1 flex-col gap-1.5 p-2.5">
-          {/* Platform badge */}
-          {product.platform && product.platform !== "generic" && (
-            <Badge variant="secondary" className="w-fit text-[10px] capitalize">
-              {product.platform}
-            </Badge>
-          )}
-
-          {/* Title */}
+        {/* Info */}
+        <div className="flex-1 min-w-0">
           <Link
             to={`/products/${product.id}`}
-            className="line-clamp-2 text-xs font-medium leading-snug hover:underline sm:text-sm"
+            className="line-clamp-1 text-sm font-medium hover:underline"
           >
             {product.title ?? product.url}
           </Link>
-
-          {/* Price + stock status */}
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-bold tabular-nums sm:text-base">
-              {formatPrice(product.current_price, product.currency)}
-            </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {product.brand && <span>{product.brand}</span>}
+            {product.brand && product.platform && product.platform !== "generic" && <span>·</span>}
+            {product.platform && product.platform !== "generic" && (
+              <span className="capitalize">{product.platform}</span>
+            )}
             {product.in_stock === true && (
               <Badge className="h-4 bg-green-100 px-1.5 text-[10px] font-medium text-green-700 hover:bg-green-100">
                 In stock
@@ -145,10 +98,9 @@ export default function ProductCard({ product }: ProductCardProps) {
               </Badge>
             )}
           </div>
-
           {/* Tags */}
           {product.tags.length > 0 && (
-            <div className="hidden flex-wrap gap-1 sm:flex">
+            <div className="mt-1 flex flex-wrap gap-1">
               {product.tags.map((tag) => (
                 <Badge key={tag.id} variant="outline" className="text-[10px]">
                   {tag.name}
@@ -157,6 +109,33 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
         </div>
+
+        {/* Price + change */}
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold tabular-nums">
+            {formatPrice(product.current_price, product.currency)}
+          </p>
+          {pct !== null && pct !== undefined && pct !== 0 && (
+            <div
+              className={cn(
+                "mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-semibold",
+                pct < 0 ? "text-green-600" : "text-red-500"
+              )}
+            >
+              {pct < 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
+              {pct > 0 ? "+" : ""}{pct}%
+            </div>
+          )}
+        </div>
+
+        {/* Delete button */}
+        <button
+          onClick={() => setConfirmOpen(true)}
+          className="shrink-0 rounded-full p-1.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+          aria-label="Remove product"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Delete confirmation dialog */}

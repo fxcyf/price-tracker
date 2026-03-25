@@ -26,7 +26,23 @@ export interface Product {
   tags: Tag[];
   created_at: string;
   updated_at: string;
+  price_change_pct: number | null;
 }
+
+export interface Facets {
+  brands: string[];
+  platforms: string[];
+  in_stock_count: number;
+  out_of_stock_count: number;
+}
+
+export interface Stats {
+  total: number;
+  in_stock: number;
+  price_dropped_today: number;
+}
+
+export type StockFilter = "all" | "in_stock" | "out_of_stock";
 
 export interface FieldDebug {
   value: number | string | null;
@@ -108,11 +124,21 @@ const api = axios.create({
 // ---------------------------------------------------------------------------
 
 export const getProducts = (params?: {
+  q?: string;
   category?: string;
   tag?: string;
+  brand?: string;
+  platform?: string;
+  in_stock?: boolean;
   sort_by?: SortBy;
   sort_dir?: SortDir;
 }) => api.get<Product[]>("/api/products", { params });
+
+export const getFacets = () =>
+  api.get<Facets>("/api/products/facets");
+
+export const getStats = () =>
+  api.get<Stats>("/api/products/stats");
 
 export const getTags = () =>
   api.get<string[]>("/api/tags");

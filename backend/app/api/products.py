@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import select
+from sqlalchemy import func as sa_func, or_, select
 from sqlalchemy.sql.expression import nullslast
 from sqlalchemy.orm import selectinload
 
@@ -70,6 +70,7 @@ class ProductOut(BaseModel):
     tags: list[TagOut]
     created_at: datetime
     updated_at: datetime
+    price_change_pct: Optional[float] = None
 
 
 class ProductCreate(BaseModel):
@@ -181,12 +182,16 @@ _SORT_COLUMNS = {
 @router.get("/products", response_model=list[ProductOut])
 async def list_products(
     db: DB,
+    q: Annotated[Optional[str], Query()] = None,
     category: Annotated[Optional[str], Query()] = None,
     tag: Annotated[Optional[str], Query()] = None,
+    brand: Annotated[Optional[str], Query()] = None,
+    platform: Annotated[Optional[str], Query()] = None,
+    in_stock: Annotated[Optional[bool], Query()] = None,
     sort_by: Annotated[str, Query()] = "date_added",
     sort_dir: Annotated[str, Query()] = "desc",
 ):
-    """List all tracked products with optional category/tag filters and sorting."""
+    """List all tracked products with optional filters and sorting."""
     if sort_by not in _SORT_COLUMNS:
         sort_by = "date_added"
     if sort_dir not in ("asc", "desc"):
@@ -197,14 +202,145 @@ async def list_products(
 
     stmt = select(Product).options(selectinload(Product.tags)).order_by(order_expr)
 
+    # Global search — matches title, brand, or category
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                Product.title.ilike(pattern),
+                Product.brand.ilike(pattern),
+                Product.category.ilike(pattern),
+            )
+        )
+
+    # Legacy category filter (kept for backwards compat)
     if category:
         stmt = stmt.where(Product.category.ilike(f"%{category}%"))
 
     if tag:
         stmt = stmt.join(Product.tags).where(Tag.name == tag.strip().lower())
 
+    if brand:
+        stmt = stmt.where(Product.brand == brand)
+
+    if platform:
+        stmt = stmt.where(Product.platform == platform)
+
+    if in_stock is not None:
+        stmt = stmt.where(Product.in_stock == in_stock)
+
     result = await db.execute(stmt)
-    return result.scalars().all()
+    products = result.scalars().all()
+
+    # Compute price_change_pct for each product from the two most recent price records
+    product_ids = [p.id for p in products]
+    pct_map: dict[uuid.UUID, float | None] = {}
+    if product_ids:
+        for pid in product_ids:
+            rows = await db.execute(
+                select(PriceHistory.price)
+                .where(PriceHistory.product_id == pid)
+                .order_by(PriceHistory.scraped_at.desc())
+                .limit(2)
+            )
+            prices = rows.scalars().all()
+            if len(prices) >= 2 and prices[1] and prices[1] != 0:
+                pct_map[pid] = round((prices[0] - prices[1]) / prices[1] * 100, 2)
+
+    # Build response with price_change_pct
+    out: list[dict] = []
+    for p in products:
+        d = ProductOut.model_validate(p).model_dump()
+        d["price_change_pct"] = pct_map.get(p.id)
+        out.append(d)
+    return out
+
+
+class FacetsOut(BaseModel):
+    brands: list[str]
+    platforms: list[str]
+    in_stock_count: int
+    out_of_stock_count: int
+
+
+@router.get("/products/facets", response_model=FacetsOut)
+async def product_facets(db: DB):
+    """Return available filter options (brands, platforms, stock counts)."""
+    brand_rows = await db.execute(
+        select(Product.brand)
+        .where(Product.brand.is_not(None))
+        .distinct()
+        .order_by(Product.brand)
+    )
+    brands = brand_rows.scalars().all()
+
+    platform_rows = await db.execute(
+        select(Product.platform)
+        .where(Product.platform.is_not(None))
+        .distinct()
+        .order_by(Product.platform)
+    )
+    platforms = platform_rows.scalars().all()
+
+    in_stock_row = await db.execute(
+        select(sa_func.count()).select_from(Product).where(Product.in_stock == True)  # noqa: E712
+    )
+    in_stock_count = in_stock_row.scalar() or 0
+
+    out_of_stock_row = await db.execute(
+        select(sa_func.count()).select_from(Product).where(Product.in_stock == False)  # noqa: E712
+    )
+    out_of_stock_count = out_of_stock_row.scalar() or 0
+
+    return FacetsOut(
+        brands=brands,
+        platforms=platforms,
+        in_stock_count=in_stock_count,
+        out_of_stock_count=out_of_stock_count,
+    )
+
+
+class StatsOut(BaseModel):
+    total: int
+    in_stock: int
+    price_dropped_today: int
+
+
+@router.get("/products/stats", response_model=StatsOut)
+async def product_stats(db: DB):
+    """Quick stats for the product list header."""
+    total_row = await db.execute(select(sa_func.count()).select_from(Product))
+    total = total_row.scalar() or 0
+
+    in_stock_row = await db.execute(
+        select(sa_func.count()).select_from(Product).where(Product.in_stock == True)  # noqa: E712
+    )
+    in_stock = in_stock_row.scalar() or 0
+
+    # Count products whose price dropped in the last 24h
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    # Subquery: for each product, get the latest price before 'since' and the latest price after
+    dropped = 0
+    product_ids_rows = await db.execute(select(Product.id))
+    for (pid,) in product_ids_rows.all():
+        old_row = await db.execute(
+            select(PriceHistory.price)
+            .where(PriceHistory.product_id == pid, PriceHistory.scraped_at < since)
+            .order_by(PriceHistory.scraped_at.desc())
+            .limit(1)
+        )
+        new_row = await db.execute(
+            select(PriceHistory.price)
+            .where(PriceHistory.product_id == pid, PriceHistory.scraped_at >= since)
+            .order_by(PriceHistory.scraped_at.desc())
+            .limit(1)
+        )
+        old_price = old_row.scalar()
+        new_price = new_row.scalar()
+        if old_price and new_price and new_price < old_price:
+            dropped += 1
+
+    return StatsOut(total=total, in_stock=in_stock, price_dropped_today=dropped)
 
 
 @router.get("/products/{product_id}", response_model=ProductOut)
