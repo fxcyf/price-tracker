@@ -4,7 +4,7 @@
 
 ## Git 信息
 
-- Remote: https://github.com/fxcyf/price-tracker.git
+- Remote: git@github-fxcyf:fxcyf/price-tracker.git
 - 默认分支: master
 
 ## 任务生命周期
