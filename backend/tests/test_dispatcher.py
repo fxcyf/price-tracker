@@ -168,22 +168,20 @@ class TestLayer2bLearnedRule:
 
 
 # ---------------------------------------------------------------------------
-# Merge behaviour: first-wins means wrong Layer-1 price persists
-# (documented known limitation — test ensures we don't accidentally change it)
+# Platform rule price overrides OG/JSON-LD price
+# (CSS selectors target the displayed sale price; OG may carry original price)
 # ---------------------------------------------------------------------------
 
-class TestFirstWinsSemantics:
+class TestPlatformRulePriceOverride:
     @pytest.mark.asyncio
-    async def test_og_price_cannot_be_overridden_by_platform_rule(self):
-        """Layer 1 price sticks even if Layer 2a has a different value.
-        This is by design (trust the first source); track it explicitly."""
-        # Amazon HTML that has BOTH og:price ($189.99) and CSS selector price ($189.99)
-        # Both happen to agree here; the important thing is merge() keeps Layer 1.
+    async def test_platform_rule_price_overrides_og_price(self):
+        """When OG has the original price and CSS selector has the sale price,
+        the platform rule price wins."""
         html = (
             '<html><head>'
-            '<meta property="og:price:amount" content="189.99">'
+            '<meta property="og:price:amount" content="128.00">'
             '</head><body>'
-            '<span class="a-offscreen">$189.99</span>'
+            '<div class="a-price"><span class="a-offscreen">$99.99</span></div>'
             '</body></html>'
         )
         db = _make_db_mock(learned_rule=None)
@@ -191,4 +189,17 @@ class TestFirstWinsSemantics:
             result, _ = await extract_product_data(
                 html, "https://www.amazon.com/dp/B08N5", db
             )
-        assert result.price == 189.99
+        assert result.price == 99.99
+
+    @pytest.mark.asyncio
+    async def test_og_price_kept_for_non_platform_urls(self):
+        """For unknown platforms (no CSS rule), OG price is preserved."""
+        html = (
+            '<html><head>'
+            '<meta property="og:price:amount" content="49.99">'
+            '</head><body></body></html>'
+        )
+        db = _make_db_mock(learned_rule=None)
+        with patch("app.scrapers.dispatcher.extract_with_llm"):
+            result, _ = await extract_product_data(html, URL, db)
+        assert result.price == 49.99

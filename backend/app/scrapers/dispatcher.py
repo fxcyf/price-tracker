@@ -213,6 +213,11 @@ async def extract_product_data(html: str, url: str, db: AsyncSession) -> tuple[P
             "title": pr.title_selector,
             "image_url": pr.image_selector,
         }
+        # Platform CSS selectors target the actual displayed (sale) price, while
+        # OG / JSON-LD may carry the original / full price.  When the platform
+        # rule successfully extracted a price, treat it as authoritative.
+        if rules_data.price is not None:
+            new_result.price = rules_data.price
         # A hardcoded platform brand is authoritative — override whatever OG/JSON-LD
         # returned (e.g. Madewell's JSON-LD emits the internal code "MW" instead of
         # the brand name).

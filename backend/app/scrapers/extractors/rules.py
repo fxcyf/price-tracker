@@ -233,18 +233,22 @@ def _detect_platform(url: str) -> str | None:
 def _parse_price(text: str | None) -> float | None:
     if not text:
         return None
-    # Prefer the first currency-anchored number.  This avoids false matches on
-    # discount percentages ("Save 40%: $59.99" → 59.99, not 40) and on plain
-    # bare numbers that happen to appear before the actual price in the text.
-    currency_match = re.search(
+    # Find ALL currency-anchored numbers.  When a price element contains both
+    # the original and sale prices (e.g. "$128.00$76.50"), we pick the lowest
+    # one — the sale / current price is always ≤ the original.
+    currency_matches = re.findall(
         r"[$€£¥₩]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)",
         text.strip(),
     )
-    if currency_match:
-        try:
-            return float(currency_match.group(1).replace(",", ""))
-        except ValueError:
-            pass
+    if currency_matches:
+        prices = []
+        for m in currency_matches:
+            try:
+                prices.append(float(m.replace(",", "")))
+            except ValueError:
+                continue
+        if prices:
+            return min(prices)
     # Fallback: first standalone number (e.g. bare "25.99" from a meta tag).
     match = re.search(r"(?<!\d)(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", text.strip())
     if not match:

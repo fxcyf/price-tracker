@@ -49,6 +49,11 @@ class TestParsePrice:
         ("", None),
         ("Free", None),
         ("USD 29.99", 29.99),
+        # When text contains both original and sale price, pick the lowest
+        ("$128.00$76.50", 76.50),
+        ("$128.00 $76.50", 76.50),
+        ("Was $128.00 Now $76.50", 76.50),
+        ("Save 40%: $59.99", 59.99),
     ])
     def test_parse(self, text, expected):
         assert _parse_price(text) == expected
