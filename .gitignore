@@ -45,6 +45,3 @@ celerybeat-schedule
 node_modules/
 .next/
 out/
-
-# Deploy webhook logs
-scripts/*.log

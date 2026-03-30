@@ -1,0 +1,18 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    # Prevent concurrent deploys; cancel in-progress if new push arrives
+    concurrency:
+      group: deploy
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy
+        run: bash scripts/deploy.sh

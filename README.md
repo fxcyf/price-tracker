@@ -147,55 +147,46 @@ python -m pytest
 
 ## Auto Deploy
 
-Push to `master` triggers automatic deployment via a GitHub webhook.
+Push to `master` triggers automatic deployment via a GitHub Actions self-hosted runner.
 
 ### Architecture
 
 ```
-GitHub push → Cloudflare Tunnel → localhost:9000 (webhook) → deploy.sh
+git push → GitHub Actions → self-hosted runner (your machine) → deploy.sh
 ```
 
-The webhook service runs on the **host machine** (not in Docker) via macOS launchd. It receives GitHub push events, verifies the webhook secret, and runs `deploy.sh` which pulls code, builds the frontend, and restarts the Docker stack.
+The runner is a GitHub-provided agent running on the host machine. It polls GitHub for new jobs (outbound connections only — no ports exposed). When a push to `master` is detected, it checks out the code and runs `scripts/deploy.sh`.
 
 ### Setup
 
-1. **Edit the webhook secret** in `scripts/com.pricetracker.deploy-webhook.plist`:
-   ```xml
-   <key>DEPLOY_WEBHOOK_SECRET</key>
-   <string>your-secret-here</string>
-   ```
+1. **Install the GitHub Actions runner** on your machine:
+   - Go to repo Settings → Actions → Runners → New self-hosted runner
+   - Follow the instructions to download, configure, and install as a service
+   - The runner will be installed under `~/actions-runner/` (or your chosen path)
 
-2. **Install the launchd service**:
+2. **Install the runner as a launchd service** (so it survives reboots):
    ```bash
-   bash scripts/setup-deployer.sh
+   cd ~/actions-runner
+   ./svc.sh install
+   ./svc.sh start
    ```
 
-3. **Add a Cloudflare Tunnel route** for the webhook:
-   - Service: `http://localhost:9000`
-   - Bypass Zero Trust for this route (security is via webhook secret)
-
-4. **Add a GitHub Webhook** (repo Settings → Webhooks):
-   - Payload URL: `https://deploy.yourdomain.com/webhook`
-   - Content type: `application/json`
-   - Secret: same as `DEPLOY_WEBHOOK_SECRET`
-   - Events: Just the push event
+3. That's it. Push to `master` and the workflow runs automatically.
 
 ### Useful commands
 
 ```bash
-# Check service status
-launchctl list | grep pricetracker
+# Runner status
+cd ~/actions-runner && ./svc.sh status
 
-# View logs
-tail -f scripts/webhook.stdout.log
-tail -f scripts/deploy.log
-
-# Manual deploy
+# Manual deploy (without going through GitHub Actions)
 bash scripts/deploy.sh
 
-# Stop/start service
-launchctl unload ~/Library/LaunchAgents/com.pricetracker.deploy-webhook.plist
-launchctl load ~/Library/LaunchAgents/com.pricetracker.deploy-webhook.plist
+# View workflow runs
+gh run list --workflow=deploy.yml
+
+# View a specific run's logs
+gh run view <run-id> --log
 ```
 
 ---
@@ -238,7 +229,5 @@ launchctl load ~/Library/LaunchAgents/com.pricetracker.deploy-webhook.plist
 | `OPENAI_MODEL` | Model to use for extraction | `gpt-4o-mini` |
 | `DEBUG` | Enable debug mode | `false` |
 | `FRONTEND_URL` | Used in email alert links | `https://example.com` |
-| `DEPLOY_WEBHOOK_SECRET` | GitHub webhook secret (host-side, not Docker) | |
-| `DEPLOY_WEBHOOK_PORT` | Webhook listener port (host-side) | `9000` |
 
 See `.env.example` for a ready-to-copy template.

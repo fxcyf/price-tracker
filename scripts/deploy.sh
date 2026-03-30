@@ -1,44 +1,13 @@
 #!/usr/bin/env bash
-# deploy.sh — Pull latest code, build frontend, restart Docker stack.
-# Called by the webhook service or manually.
+# deploy.sh — Build frontend and restart Docker stack.
+# Called by GitHub Actions self-hosted runner or manually.
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-LOCK_FILE="/tmp/price-tracker-deploy.lock"
-LOG_FILE="${REPO_DIR}/scripts/deploy.log"
-
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
-
-# ── Concurrency guard ────────────────────────────────────────────────────────
-if [ -f "$LOCK_FILE" ]; then
-    LOCK_PID=$(cat "$LOCK_FILE" 2>/dev/null || true)
-    if kill -0 "$LOCK_PID" 2>/dev/null; then
-        log "Deploy already running (PID $LOCK_PID), skipping."
-        exit 0
-    fi
-    log "Stale lock file found, removing."
-    rm -f "$LOCK_FILE"
-fi
-echo $$ > "$LOCK_FILE"
-trap 'rm -f "$LOCK_FILE"' EXIT
-
-# ── Pull latest code ─────────────────────────────────────────────────────────
-log "=== Deploy started ==="
 cd "$REPO_DIR"
 
-log "Pulling latest code..."
-git fetch origin master
-LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/master)
-
-if [ "$LOCAL" = "$REMOTE" ]; then
-    log "Already up to date ($LOCAL). Nothing to deploy."
-    exit 0
-fi
-
-git pull origin master
-log "Updated from ${LOCAL:0:7} to $(git rev-parse --short HEAD)"
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 # ── Build frontend ───────────────────────────────────────────────────────────
 log "Building frontend..."
@@ -66,5 +35,4 @@ for i in $(seq 1 30); do
 done
 
 log "WARNING: Backend did not become healthy within 60s."
-log "=== Deploy finished with warnings ==="
 exit 1
