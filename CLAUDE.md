@@ -77,6 +77,13 @@ rebase 发生冲突时：
 
 **同样的问题不要犯两次！**
 
+## 部署
+
+- 部署在个人电脑上，通过 Cloudflare Tunnel + Zero Trust 暴露公网访问
+- Push 到 master 后自动部署：GitHub Webhook → `scripts/deploy-webhook.py`（宿主机 launchd 服务）→ `scripts/deploy.sh`
+- webhook 服务**不在** Docker Compose 内，通过 launchd 常驻运行（端口 9000）
+- 手动部署：`bash scripts/deploy.sh`
+
 ## 注意事项
 
 - 在 worktree 中工作时，不要切换到其他分支

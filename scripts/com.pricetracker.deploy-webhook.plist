@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pricetracker.deploy-webhook</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/zhoujunwei/Projects/price-tracker/scripts/deploy-webhook.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DEPLOY_WEBHOOK_SECRET</key>
+        <string>CHANGE_ME</string>
+        <key>DEPLOY_WEBHOOK_PORT</key>
+        <string>9000</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/zhoujunwei/Projects/price-tracker</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/zhoujunwei/Projects/price-tracker/scripts/webhook.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/zhoujunwei/Projects/price-tracker/scripts/webhook.stderr.log</string>
+</dict>
+</plist>
