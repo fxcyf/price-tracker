@@ -35,10 +35,11 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
     --project-name prod up -d --build
 log "Docker stack restarted."
 
-# ── Health check ─────────────────────────────────────────────────────────────
+# ── Wait for backend healthy ──────────────────────────────────────────────────
 log "Waiting for backend health check..."
 for i in $(seq 1 30); do
-    if curl -sf http://localhost/api/health > /dev/null 2>&1; then
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' prod-backend-1 2>/dev/null || echo "unknown")
+    if [ "$STATUS" = "healthy" ]; then
         log "Backend is healthy."
         log "=== Deploy finished successfully ==="
         exit 0
