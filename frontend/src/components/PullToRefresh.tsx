@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
-const THRESHOLD = 80;
+const THRESHOLD = 60;
+const MAX_PULL = 80;
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<unknown>;
@@ -34,8 +35,7 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
         setPullDistance(0);
         return;
       }
-      // Dampen the pull distance
-      setPullDistance(Math.min(delta * 0.5, THRESHOLD * 1.5));
+      setPullDistance(Math.min(delta * 0.4, MAX_PULL));
     },
     [pulling, refreshing],
   );
@@ -46,7 +46,7 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
 
     if (pullDistance >= THRESHOLD) {
       setRefreshing(true);
-      setPullDistance(THRESHOLD * 0.6);
+      setPullDistance(40);
       try {
         await onRefresh();
       } finally {
@@ -69,12 +69,18 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
     >
       {/* Pull indicator */}
       <div
-        className="flex items-center justify-center overflow-hidden transition-[height] duration-200"
-        style={{ height: pullDistance > 0 ? `${pullDistance}px` : 0 }}
+        className="flex items-center justify-center overflow-hidden"
+        style={{
+          height: pullDistance > 0 ? `${pullDistance}px` : 0,
+          transition: pulling ? "none" : "height 0.2s ease-out",
+        }}
       >
         <RefreshCw
-          className={`h-5 w-5 text-muted-foreground transition-transform ${refreshing ? "animate-spin" : ""}`}
-          style={{ transform: `rotate(${progress * 360}deg)`, opacity: progress }}
+          className={`h-4 w-4 text-muted-foreground ${refreshing ? "animate-spin" : ""}`}
+          style={{
+            transform: refreshing ? undefined : `rotate(${progress * 360}deg)`,
+            opacity: progress,
+          }}
         />
       </div>
       {children}

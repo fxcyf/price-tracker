@@ -148,6 +148,7 @@ export default function ProductListPage() {
           </div>
         </div>
 
+        <PullToRefresh onRefresh={refreshAll}>
         {/* Stats bar */}
         {stats && stats.total > 0 && (
           <div className="flex items-center gap-4 border-b bg-muted/30 px-4 py-2">
@@ -370,7 +371,6 @@ export default function ProductListPage() {
         </div>
 
         {/* Content */}
-        <PullToRefresh onRefresh={refreshAll}>
         <div className="p-4">
           {isLoading && (
             <div className={viewMode === "grid" ? "grid grid-cols-2 gap-3 lg:grid-cols-3" : "flex flex-col gap-2"}>
@@ -415,6 +415,7 @@ export default function ProductListPage() {
         </div>
         </PullToRefresh>
       </div>
+
 
       <AddProductModal open={addOpen} onOpenChange={setAddOpen} />
     </>
