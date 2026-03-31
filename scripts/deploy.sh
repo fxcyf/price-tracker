@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
-# deploy.sh — Build frontend and restart Docker stack.
+# deploy.sh — Pull latest code, build frontend, restart Docker stack.
 # Called by GitHub Actions self-hosted runner or manually.
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="/Users/zhoujunwei/Projects/price-tracker"
 cd "$REPO_DIR"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# ── Pull latest code ─────────────────────────────────────────────────────────
+log "=== Deploy started ==="
+log "Pulling latest code..."
+git pull origin master
+log "Now at $(git rev-parse --short HEAD)"
+
 # ── Build frontend ───────────────────────────────────────────────────────────
 log "Building frontend..."
 cd "$REPO_DIR/frontend"
-pnpm install --frozen-lockfile
+pnpm install
 pnpm build
 cd "$REPO_DIR"
 log "Frontend build complete."

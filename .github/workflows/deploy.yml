@@ -1,3 +1,4 @@
+# Auto-deploy on push to master via self-hosted runner
 name: Deploy
 
 on:
@@ -7,12 +8,11 @@ on:
 jobs:
   deploy:
     runs-on: self-hosted
-    # Prevent concurrent deploys; cancel in-progress if new push arrives
     concurrency:
       group: deploy
       cancel-in-progress: true
+    env:
+      PROJECT_DIR: /Users/zhoujunwei/Projects/price-tracker
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Run deploy script
-        run: bash scripts/deploy.sh
+      - name: Deploy
+        run: bash $PROJECT_DIR/scripts/deploy.sh
