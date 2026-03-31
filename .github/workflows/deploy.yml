@@ -14,5 +14,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy
+      - name: Run deploy script
         run: bash scripts/deploy.sh
