@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -7,6 +7,7 @@ import {
   List,
   Package,
   Plus,
+  RefreshCw,
   Search,
   ShoppingBag,
   TrendingDown,
@@ -26,6 +27,7 @@ import {
 import ProductCard from "@/components/ProductCard";
 import ProductRow from "@/components/ProductRow";
 import AddProductModal from "@/components/AddProductModal";
+import PullToRefresh from "@/components/PullToRefresh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +44,17 @@ export default function ProductListPage() {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [refreshing, setRefreshing] = useState(false);
   const queryClient = useQueryClient();
+
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient]);
 
   const { data: allTags = [] } = useQuery({
     queryKey: ["tags"],
@@ -117,11 +129,23 @@ export default function ProductListPage() {
         <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <h1 className="text-base font-semibold lg:hidden">Price Tracker</h1>
           <h1 className="hidden text-base font-semibold lg:block">Products</h1>
-          <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Product</span>
-            <span className="sm:hidden">Add</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshAll}
+              disabled={refreshing}
+              className="h-8 w-8 p-0"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+            <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Product</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          </div>
         </div>
 
         {/* Stats bar */}
@@ -346,6 +370,7 @@ export default function ProductListPage() {
         </div>
 
         {/* Content */}
+        <PullToRefresh onRefresh={refreshAll}>
         <div className="p-4">
           {isLoading && (
             <div className={viewMode === "grid" ? "grid grid-cols-2 gap-3 lg:grid-cols-3" : "flex flex-col gap-2"}>
@@ -388,6 +413,7 @@ export default function ProductListPage() {
             </div>
           )}
         </div>
+        </PullToRefresh>
       </div>
 
       <AddProductModal open={addOpen} onOpenChange={setAddOpen} />
