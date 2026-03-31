@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-REPO_DIR="/Users/zhoujunwei/Projects/price-tracker"
+REPO_DIR="/home/fxcyf/MyFiles/random/price-tracker"
 cd "$REPO_DIR"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
