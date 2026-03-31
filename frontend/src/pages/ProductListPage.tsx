@@ -115,7 +115,7 @@ export default function ProductListPage() {
       <div className="flex flex-col">
         {/* Sticky header */}
         <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
-          <h1 className="text-base font-semibold lg:hidden">Price Tracker v2</h1>
+          <h1 className="text-base font-semibold lg:hidden">Price Tracker</h1>
           <h1 className="hidden text-base font-semibold lg:block">Products</h1>
           <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
             <Plus className="h-4 w-4" />

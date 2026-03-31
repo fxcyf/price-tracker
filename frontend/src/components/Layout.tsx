@@ -15,7 +15,7 @@ export default function Layout() {
       <aside className="hidden lg:flex w-56 flex-col border-r bg-card">
         <div className="flex h-14 items-center gap-2 px-4">
           <TrendingDown className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold tracking-tight">Price Tracker v2</span>
+          <span className="text-sm font-semibold tracking-tight">Price Tracker</span>
         </div>
         <Separator />
         <nav className="flex-1 space-y-1 p-2">
