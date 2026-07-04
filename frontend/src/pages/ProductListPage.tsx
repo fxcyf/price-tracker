@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
@@ -34,7 +35,18 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProductListPage() {
+  const location = useLocation();
   const [addOpen, setAddOpen] = useState(false);
+  const [sharedUrl, setSharedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const state = location.state as { sharedUrl?: string } | null;
+    if (state?.sharedUrl) {
+      setSharedUrl(state.sharedUrl);
+      setAddOpen(true);
+      window.history.replaceState({}, "");
+    }
+  }, [location.state]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [confirmDeleteTag, setConfirmDeleteTag] = useState<string | null>(null);
@@ -417,7 +429,14 @@ export default function ProductListPage() {
       </div>
 
 
-      <AddProductModal open={addOpen} onOpenChange={setAddOpen} />
+      <AddProductModal
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) setSharedUrl(null);
+        }}
+        initialUrl={sharedUrl}
+      />
     </>
   );
 }

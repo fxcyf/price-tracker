@@ -4,6 +4,7 @@ import Layout from "@/components/Layout";
 import ProductListPage from "@/pages/ProductListPage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
 import SettingsPage from "@/pages/SettingsPage";
+import ShareTargetPage from "@/pages/ShareTargetPage";
 import { Toaster } from "@/components/ui/toaster";
 
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ export default function App() {
             <Route index element={<ProductListPage />} />
             <Route path="products/:id" element={<ProductDetailPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="share" element={<ShareTargetPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

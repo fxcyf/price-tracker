@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";  // used in curl textarea
 interface AddProductModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialUrl?: string | null;
 }
 
 function formatPrice(price: number | null, currency: string): string {
@@ -39,7 +40,7 @@ function parseDomain(url: string): string {
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 
-export default function AddProductModal({ open, onOpenChange }: AddProductModalProps) {
+export default function AddProductModal({ open, onOpenChange, initialUrl }: AddProductModalProps) {
   const [searchParams] = useSearchParams();
   const debugMode = searchParams.has("debug");
 
@@ -57,9 +58,12 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
     queryFn: () => getTags().then((r) => r.data),
   });
 
-  // On open, try to pre-fill from clipboard if it contains a URL
   useEffect(() => {
     if (!open) return;
+    if (initialUrl) {
+      setUrl(initialUrl);
+      return;
+    }
     navigator.clipboard?.readText()
       .then((text) => {
         const trimmed = text.trim();
@@ -67,8 +71,14 @@ export default function AddProductModal({ open, onOpenChange }: AddProductModalP
           setUrl(trimmed);
         }
       })
-      .catch(() => { }); // permission denied or API unavailable — silent
+      .catch(() => { });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open && initialUrl && url === initialUrl && !parseMutation.isPending && !preview) {
+      parseMutation.mutate(initialUrl);
+    }
+  }, [open, initialUrl, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const parseMutation = useMutation({
     mutationFn: (u: string) => parseUrl(u).then((r) => r.data),
