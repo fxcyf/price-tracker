@@ -191,6 +191,21 @@ gh run view <run-id> --log
 
 ---
 
+## iOS Share Sheet Integration
+
+Price Tracker supports the **Web Share Target API**, allowing you to share product URLs directly from Safari or any app's share menu on iOS.
+
+### Setup
+
+1. Open Price Tracker in Safari on your iPhone/iPad
+2. Tap the **Share** button → **Add to Home Screen**
+3. Now when browsing any product page, tap **Share** → **Price Tracker**
+4. The app opens with the URL pre-filled and automatically starts fetching the price preview
+
+> **Note:** The PWA must be installed to the home screen for it to appear in the share menu. Requires iOS 15+ / Safari 15+.
+
+---
+
 ## API Reference
 
 | Method | Path | Purpose |
